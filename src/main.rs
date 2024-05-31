@@ -9,7 +9,7 @@ mod uart;
 mod sync;
 
 // const GPFSEL3: usize = 0x2020000C;
-const GPFSEL1: usize = 0x2020004;
+const GPFSEL1: usize = 0x20200004;
 const GPFSEL4: usize = 0x20200010;
 const GPSET1: usize = 0x20200020;
 const GPCLR1: usize = 0x2020002C;
@@ -48,66 +48,40 @@ extern "C" {
 #[no_mangle]
 pub extern "C" fn first_stage() -> ! {
     // Set GPIO pin 47 as output
-    // unsafe {
-    //     get32(GPFSEL4);
-    //     let mask = 0b111 << 21;
-    //     let output = 0b001 << 21;
-    //     put32(GPFSEL4, (get32(GPFSEL4) & !mask) | output);
-    // }
-
-    // set GPIO pin 14 to alt function 5
-    // let func_sel = unsafe { get32(GPFSEL1) };
-    // let mask = 0b111 << 12;
-    // let alt_func = 0b010 << 12;
-    // unsafe {
-    //     put32(GPFSEL1, (func_sel & !mask) | alt_func);
-    // }
-
-    // let mut uart = uart::MiniUart::get().unwrap();
-    // uart.set_bit_mode(true);
-    // uart.set_baud_rate(115200);
-    // let mut transmitter = uart.enable_transmitter();
-    // transmitter.send_blocking(repeat(b'U'));
     unsafe {
-        put32(AUX_ENABLES,1);
-        put32(AUX_MU_IER_REG,0);
-        put32(AUX_MU_CNTL_REG,0);
-        put32(AUX_MU_LCR_REG,3);
-        put32(AUX_MU_MCR_REG,0);
-        put32(AUX_MU_IER_REG,0);
-        put32(AUX_MU_IIR_REG,0xC6);
-        put32(AUX_MU_BAUD_REG,270);
-        
-        let mut ra = get32(GPFSEL1);
-        ra&=!(7<<12); //gpio14
-        ra|=2<<12;    //alt5
-        put32(GPFSEL1,ra);
-
-        put32(AUX_MU_CNTL_REG,2);
-
-        let mut i = 0;
-        loop {
-            loop {
-                if get32(AUX_MU_LSR_REG)&0x20 != 0 { break };
-            }
-            i += 1;
-            put32(AUX_MU_IO_REG,0x30 + (i & 7));
-        }
+        get32(GPFSEL4);
+        let mask = 0b111 << 21;
+        let output = 0b001 << 21;
+        put32(GPFSEL4, (get32(GPFSEL4) & !mask) | output);
     }
 
-    // loop {
-    //     // Turn off the LED
-    //     unsafe {
-    //         put32(GPSET1, 1 << 15);
-    //     }
-    //     delay(TIMER_FOUR_SEC);
+    // set GPIO pin 14 to alt function 5
+    let func_sel = unsafe { get32(GPFSEL1) };
+    let mask = 0b111 << 12;
+    let alt_func = 0b010 << 12;
+    unsafe {
+        put32(GPFSEL1, (func_sel & !mask) | alt_func);
+    }
 
-    //     // Turn on the LED
-    //     unsafe {
-    //         put32(GPCLR1, 1 << 15);
-    //     }
-    //     delay(TIMER_FOUR_SEC);
-    // }
+    let mut uart = uart::MiniUart::get().unwrap();
+    uart.set_bit_mode(true);
+    uart.set_baud_rate(115200);
+    let mut transmitter = uart.enable_transmitter();
+    transmitter.send_blocking(repeat(b'U'));
+    
+    loop {
+        // Turn off the LED
+        unsafe {
+            put32(GPSET1, 1 << 15);
+        }
+        delay(TIMER_FOUR_SEC);
+
+        // Turn on the LED
+        unsafe {
+            put32(GPCLR1, 1 << 15);
+        }
+        delay(TIMER_FOUR_SEC);
+    }
 }
 
 #[export_name = "rust_irq_handler"]
