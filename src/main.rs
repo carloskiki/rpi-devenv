@@ -14,27 +14,6 @@ const GPFSEL4: usize = 0x20200010;
 const GPSET1: usize = 0x20200020;
 const GPCLR1: usize = 0x2020002C;
 
-const AUX_ENABLES: usize = 0x20215004;
-/// Mini Uart I/O Data
-const AUX_MU_IO_REG: usize = 0x20215040;
-const AUX_MU_IER_REG: usize = 0x20215044;
-/// Mini Uart Interrupt Identify
-const AUX_MU_IIR_REG: usize = 0x20215048;
-/// Mini Uart Line Control
-const AUX_MU_LCR_REG: usize = 0x2021504C;
-/// Mini Uart Modem Control
-const AUX_MU_MCR_REG: usize = 0x20215050;
-/// Mini Uart Line Status
-const AUX_MU_LSR_REG: usize = 0x20215054;
-/// Mini Uart Modem Status
-const AUX_MU_MSR_REG: usize = 0x20215058;
-/// Mini Uart Extra Control
-const AUX_MU_CNTL_REG: usize = 0x20215060;
-/// Mini Uart Extra Status 
-const AUX_MU_STAT_REG: usize = 0x20215064;
-/// Mini Uart Baudrate
-const AUX_MU_BAUD_REG: usize = 0x20215068;
-
 const TIMER_FOUR_SEC: u32 = 0x400000;
 const SYS_TIMER_BASE: usize = 0x20003000;
 const CLO: usize = SYS_TIMER_BASE + 0x04;
@@ -67,6 +46,7 @@ pub extern "C" fn first_stage() -> ! {
     uart.set_bit_mode(true);
     uart.set_baud_rate(115200);
     let mut transmitter = uart.enable_transmitter();
+
     transmitter.send_blocking(repeat(b'U'));
     
     loop {

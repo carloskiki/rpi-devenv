@@ -35,26 +35,24 @@ pub struct MiniUart<const RX_ENABLE: bool, const TX_ENABLE: bool>{
 
 impl MiniUart<false, false> {
     pub fn get() -> Option<Self> {
-
-        // TODO: why???
-         unsafe {
-             put32(AUX_MU_MCR_REG,0);
-             put32(AUX_MU_IER_REG,0);
-         }
-        
+        let lock = MiniUartLock::get()?;
         // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
         // appropriately. A new `Uart` instance is not created if the peripheral is already in use.
         // A memory barrier is used according to the BCM2835 manual section 1.3.
+        //
+        // Disable the Mini UART RX and TX.
+        unsafe { put32(AUX_MU_CNTL_REG, 0) };
+        
         Some(Self {
             baud_rate: 0,
             eight_bits: false,
-            lock: MiniUartLock::get()?,
+            lock,
         })
     }
 
     pub fn set_baud_rate(&mut self, baud_rate: u32) {
         assert!((476..=31_250_000).contains(&baud_rate), "baud rate not in the range 476..=31_250_000");
-        let baud_rate_reg = (250_000_000 / (8 * baud_rate)) - 1;
+        let baud_rate_reg = (CLOCK_SPEED / (8 * baud_rate)) - 1;
         // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
         // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
         //
@@ -79,6 +77,24 @@ impl MiniUart<false, false> {
     }
 }
 
+impl<const TX_ENABLE: bool> MiniUart<false, TX_ENABLE> {
+    // TODO: this requires a gpio pin properly configured.
+    pub fn enable_receiver(self) -> MiniUart<true, TX_ENABLE> {
+        // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
+        // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
+        unsafe {
+            mem_barrier();
+            put32(AUX_MU_CNTL_REG, ((TX_ENABLE as u32) << 1) | 1);
+            put32(AUX_MU_IIR_REG, 0b10);
+        }
+        MiniUart {
+            baud_rate: self.baud_rate,
+            eight_bits: self.eight_bits,
+            lock: self.lock,
+        }
+    }
+}
+
 impl<const RX_ENABLE: bool> MiniUart<RX_ENABLE, false> {
     // TODO: this requires a gpio pin properly configured.
     pub fn enable_transmitter(self) -> MiniUart<RX_ENABLE, true> {
@@ -86,7 +102,7 @@ impl<const RX_ENABLE: bool> MiniUart<RX_ENABLE, false> {
         // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
         unsafe {
             mem_barrier();
-            put32(AUX_MU_CNTL_REG, 0b10);
+            put32(AUX_MU_CNTL_REG, 0b10 | RX_ENABLE as u32);
             put32(AUX_MU_IIR_REG, 0b100);
         }
         MiniUart {
@@ -97,6 +113,38 @@ impl<const RX_ENABLE: bool> MiniUart<RX_ENABLE, false> {
     }
 }
 
+impl<const TX_ENABLE: bool> MiniUart<true, TX_ENABLE> {
+    pub fn receive(&mut self, buf: &mut [u8]) -> usize {
+        for (i, byte) in buf.iter_mut().enumerate() {
+            if unsafe { get32(AUX_MU_LSR_REG) } & 1 == 0 {
+                return i;
+            }
+            *byte = unsafe { get32(AUX_MU_IO_REG) as u8 };
+        }
+        buf.len()
+    }
+
+    pub fn receive_exact(&mut self, buf: &mut [u8]) {
+        for byte in buf {
+            while unsafe { get32(AUX_MU_LSR_REG) } & 1 == 0 {}
+            *byte = unsafe { get32(AUX_MU_IO_REG) as u8 };
+        }
+    }
+
+    pub fn disable_receiver(self) -> MiniUart<false, TX_ENABLE> {
+        // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
+        // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
+        unsafe {
+            mem_barrier();
+            put32(AUX_MU_CNTL_REG, (TX_ENABLE as u32) << 1);
+        }
+        MiniUart {
+            baud_rate: self.baud_rate,
+            eight_bits: self.eight_bits,
+            lock: self.lock,
+        }
+    }
+}
 
 impl<const RX_ENABLE: bool> MiniUart<RX_ENABLE, true> {
     pub fn send_blocking(&mut self, bytes: impl Iterator<Item = u8>) {
@@ -168,9 +216,6 @@ impl MiniUartLock {
             }
             mem_barrier();
             put32(AUX_ENABLES, enable_state | 1);
-
-            // Disable the Mini UART RX and TX
-            put32(AUX_MU_CNTL_REG, 0);
         }
         Some(Self)
     }
