@@ -11,7 +11,6 @@ SECTIONS
         *(.text)
         *(.text.*)
     }
-    . = ALIGN(4096); /* align to page size */
 
     .rodata :
     {
@@ -19,20 +18,20 @@ SECTIONS
         *(.rodata.*)
     }
 
-    . = ALIGN(4096); /* align to page size */
-
     .data : 
     { 
         *(.data)
         *(.data.*) 
     }
 
+    __bss_start = .;
     .bss :
     {
         *(.bss)
         *(.bss.*)
     }
-
+    __bss_end = .;
+    
     /* 
         We do not care about stack unwinding information, so we discard it.
     */

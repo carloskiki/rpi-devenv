@@ -12,9 +12,3 @@ bench = false
 
 [dependencies]
 bitflags = "2.5"
-
-[profile.dev]
-panic = "abort"
-
-[profile.release]
-panic = "abort"

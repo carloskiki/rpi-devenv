@@ -1,4 +1,4 @@
-use crate::{get32, mem_barrier, put32};
+use crate::{get32, gpio::{Alternate5, Pin}, mem_barrier, put32};
 
 const CLOCK_SPEED: u32 = 250_000_000;
 
@@ -31,6 +31,8 @@ pub struct MiniUart<const RX_ENABLE: bool, const TX_ENABLE: bool>{
     baud_rate: u32,
     eight_bits: bool,
     lock: MiniUartLock,
+    transmitter_pin: Option<Pin<14, Alternate5>>,
+    receiver_pin: Option<Pin<15, Alternate5>>,
 }
 
 impl MiniUart<false, false> {
@@ -47,6 +49,8 @@ impl MiniUart<false, false> {
             baud_rate: 0,
             eight_bits: false,
             lock,
+            transmitter_pin: None,
+            receiver_pin: None,
         })
     }
 
@@ -78,8 +82,13 @@ impl MiniUart<false, false> {
 }
 
 impl<const TX_ENABLE: bool> MiniUart<false, TX_ENABLE> {
-    // TODO: this requires a gpio pin properly configured.
-    pub fn enable_receiver(self) -> MiniUart<true, TX_ENABLE> {
+    /// Enable the Mini UART receiver without providing a valid pin.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that a Mini UART receiver pin is properly configured in order to
+    /// receive data.
+    pub unsafe fn enable_receiver_no_pin(self) -> MiniUart<true, TX_ENABLE> {
         // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
         // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
         unsafe {
@@ -91,13 +100,27 @@ impl<const TX_ENABLE: bool> MiniUart<false, TX_ENABLE> {
             baud_rate: self.baud_rate,
             eight_bits: self.eight_bits,
             lock: self.lock,
+            transmitter_pin: self.transmitter_pin,
+            receiver_pin: None,
         }
+    }
+
+    pub fn enable_receiver(self, pin: Pin<15, Alternate5>) -> MiniUart<true, TX_ENABLE> {
+        // Safety: We have a valid pin, so we can safely call `enable_receiver_no_pin`.
+        let mut rx_enabled = unsafe { self.enable_receiver_no_pin() };
+        rx_enabled.receiver_pin = Some(pin);
+        rx_enabled
     }
 }
 
 impl<const RX_ENABLE: bool> MiniUart<RX_ENABLE, false> {
-    // TODO: this requires a gpio pin properly configured.
-    pub fn enable_transmitter(self) -> MiniUart<RX_ENABLE, true> {
+    /// Enable the Mini UART transmitter without providing a valid pin.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that a Mini UART transmitter pin is properly configured in order
+    /// to send data.
+    pub unsafe fn enable_transmitter_no_pin(self) -> MiniUart<RX_ENABLE, true> {
         // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
         // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
         unsafe {
@@ -109,7 +132,16 @@ impl<const RX_ENABLE: bool> MiniUart<RX_ENABLE, false> {
             baud_rate: self.baud_rate,
             eight_bits: self.eight_bits,
             lock: self.lock,
+            transmitter_pin: None,
+            receiver_pin: self.receiver_pin,
         }
+    }
+
+    pub fn enable_transmitter(self, pin: Pin<14, Alternate5>) -> MiniUart<RX_ENABLE, true> {
+        // Safety: We have a valid pin, so we can safely call `enable_transmitter_no_pin`.
+        let mut tx_enabled = unsafe { self.enable_transmitter_no_pin() };
+        tx_enabled.transmitter_pin = Some(pin);
+        tx_enabled
     }
 }
 
@@ -131,6 +163,9 @@ impl<const TX_ENABLE: bool> MiniUart<true, TX_ENABLE> {
         }
     }
 
+    /// Disable the Mini UART receiver.
+    ///
+    /// Drops the receiver pin if it was used.
     pub fn disable_receiver(self) -> MiniUart<false, TX_ENABLE> {
         // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
         // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
@@ -142,6 +177,8 @@ impl<const TX_ENABLE: bool> MiniUart<true, TX_ENABLE> {
             baud_rate: self.baud_rate,
             eight_bits: self.eight_bits,
             lock: self.lock,
+            transmitter_pin: self.transmitter_pin,
+            receiver_pin: None,
         }
     }
 }
@@ -177,6 +214,9 @@ impl<const RX_ENABLE: bool> MiniUart<RX_ENABLE, true> {
         sent
     }
 
+    /// Disable the Mini UART transmitter.
+    ///
+    /// Drops the transmitter pin if it was used.
     pub fn disable_transmitter(self) -> MiniUart<RX_ENABLE, false> {
         // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
         // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
@@ -188,6 +228,8 @@ impl<const RX_ENABLE: bool> MiniUart<RX_ENABLE, true> {
             baud_rate: self.baud_rate,
             eight_bits: self.eight_bits,
             lock: self.lock,
+            transmitter_pin: None,
+            receiver_pin: self.receiver_pin,
         }
     }
 }

@@ -1,15 +1,16 @@
 #![no_std]
 #![no_main]
+#![feature(sync_unsafe_cell)]
 
 use core::{arch::global_asm, hint::black_box, iter::repeat};
 
 use bitflags::bitflags;
+use gpio::Pin;
 
+mod gpio;
 mod uart;
-mod sync;
 
 // const GPFSEL3: usize = 0x2020000C;
-const GPFSEL1: usize = 0x20200004;
 const GPFSEL4: usize = 0x20200010;
 const GPSET1: usize = 0x20200020;
 const GPCLR1: usize = 0x2020002C;
@@ -34,34 +35,19 @@ pub extern "C" fn first_stage() -> ! {
         put32(GPFSEL4, (get32(GPFSEL4) & !mask) | output);
     }
 
-    // set GPIO pin 14 to alt function 5
-    let func_sel = unsafe { get32(GPFSEL1) };
-    let mask = 0b111 << 12;
-    let alt_func = 0b010 << 12;
-    unsafe {
-        put32(GPFSEL1, (func_sel & !mask) | alt_func);
-    }
-
     let mut uart = uart::MiniUart::get().unwrap();
     uart.set_bit_mode(true);
     uart.set_baud_rate(115200);
-    let mut transmitter = uart.enable_transmitter();
+    let mut transmitter = uart.enable_transmitter(Pin::get().unwrap());
 
     transmitter.send_blocking(repeat(b'U'));
-    
-    loop {
-        // Turn off the LED
-        unsafe {
-            put32(GPSET1, 1 << 15);
-        }
-        delay(TIMER_FOUR_SEC);
 
-        // Turn on the LED
-        unsafe {
-            put32(GPCLR1, 1 << 15);
-        }
-        delay(TIMER_FOUR_SEC);
+    // Turn on the LED
+    unsafe {
+        put32(GPCLR1, 1 << 15);
     }
+
+    loop {}
 }
 
 #[export_name = "rust_irq_handler"]
@@ -70,7 +56,7 @@ pub extern "C" fn irq_handler() {}
 #[repr(u8)]
 enum ProcessorMode {
     User = 0b10000,
-    Fiq  = 0b10001,
+    Fiq = 0b10001,
     Irq = 0b10010,
     Supervisor = 0b10011,
     Abort = 0b10111,
@@ -97,14 +83,20 @@ fn delay(mut n: u32) {
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     unsafe { mem_barrier() };
 
-    unsafe {
-        put32(GPCLR1, 1 << 15);
+    loop {
+        // Turn off the LED
+        unsafe {
+            put32(GPSET1, 1 << 15);
+        }
+        delay(TIMER_FOUR_SEC);
+
+        // Turn on the LED
+        unsafe {
+            put32(GPCLR1, 1 << 15);
+        }
+        delay(TIMER_FOUR_SEC);
     }
-
-    loop {}
-
 }
-
 
 bitflags! {
     pub struct InterruptTable: u64 {
@@ -120,7 +112,7 @@ bitflags! {
         const PCM = 1 << 55;
         const UART = 1 << 57;
 
-        
+
         const _ = !0;
     }
 }
