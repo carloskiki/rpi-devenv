@@ -1,4 +1,7 @@
-use core::{ptr::{read_volatile, write_volatile}, sync::atomic::{AtomicU32, Ordering}};
+use core::{
+    ptr::{read_volatile, write_volatile},
+    sync::atomic::{AtomicU32, Ordering},
+};
 
 use crate::{delay, mem_barrier};
 
@@ -22,17 +25,13 @@ pub struct Pin<const PIN: u8, T> {
 #[allow(private_bounds)]
 impl<const PIN: u8, T: sealed::PinType> Pin<PIN, T> {
     pub fn get() -> Option<Self> {
-        if PIN > 27 {
-            return None;
-        }
-        
+        const { assert!(PIN < 28, "invalid pin number, only pins 0-27 are valid.") };
+
         let mask = 1 << PIN;
-        let used_set = GPIO_USED_SET.load(Ordering::Acquire);
-        if used_set & mask != 0 {
+        if GPIO_USED_SET.fetch_or(mask, Ordering::Acquire) & mask != 0 {
             return None;
         }
-        GPIO_USED_SET.store(used_set | mask, Ordering::Release);
-        
+
         // Safety: The PIN constant is checked to be less than 28, so the offset is always in bounds.
         let address = unsafe { FUNCTION_SELECT_BASE.add(PIN as usize / 10) };
         let shift = (PIN as usize % 10) * 3;
@@ -41,8 +40,13 @@ impl<const PIN: u8, T: sealed::PinType> Pin<PIN, T> {
         // Safety: Memory barrier used according to the BCM2835 manual section 1.3.
         unsafe { mem_barrier() };
         // Safety: The register is valid for writing.
-        unsafe { write_volatile(address, (func_sel & !(0b111 << shift)) | (T::MODE_BITS << shift)) };
-        
+        unsafe {
+            write_volatile(
+                address,
+                (func_sel & !(0b111 << shift)) | (T::MODE_BITS << shift),
+            )
+        };
+
         Some(Pin {
             _pin: core::marker::PhantomData,
         })
@@ -52,8 +56,7 @@ impl<const PIN: u8, T: sealed::PinType> Pin<PIN, T> {
 impl<const PIN: u8, T> Drop for Pin<PIN, T> {
     fn drop(&mut self) {
         let mask = 1 << PIN;
-        let used_set = GPIO_USED_SET.load(Ordering::Acquire);
-        GPIO_USED_SET.store(used_set & !mask, Ordering::Release);
+        GPIO_USED_SET.fetch_and(!mask, Ordering::Release);
     }
 }
 
