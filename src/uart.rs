@@ -62,7 +62,6 @@ impl MiniUart<false, false> {
         //
         // The input baud rate is in the range 476..=31_250_000, therefore baud_rate_reg is a valid
         // u16 value.
-
         unsafe {
             mem_barrier();
             put32(AUX_MU_BAUD_REG, baud_rate_reg);

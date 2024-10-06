@@ -5,7 +5,7 @@
 use core::{arch::global_asm, hint::black_box, iter::repeat};
 
 use bitflags::bitflags;
-use gpio::Pin;
+use gpio::{Alternate5, Pin};
 
 mod gpio;
 mod uart;
@@ -33,19 +33,20 @@ pub extern "C" fn first_stage() -> ! {
         put32(GPFSEL4, (get32(GPFSEL4) & !mask) | output);
     }
 
-    let mut uart = uart::MiniUart::get().unwrap();
-    uart.set_bit_mode(true);
-    uart.set_baud_rate(115200);
-    let mut transmitter = uart.enable_transmitter(Pin::get().unwrap());
-
-    transmitter.send_blocking(repeat(b'U'));
-
     // Turn on the LED
     unsafe {
         put32(GPCLR1, 1 << 15);
     }
 
-    loop {}
+    let mut uart = uart::MiniUart::get().unwrap();
+    uart.set_bit_mode(true);
+    let _ = Pin::<14, Alternate5>::get();
+    // uart.set_baud_rate(115200);
+    // let mut transmitter = uart.enable_transmitter(Pin::get().unwrap());
+
+    // transmitter.send_blocking("hello world\n".bytes());
+
+    panic!();
 }
 
 #[export_name = "rust_irq_handler"]
