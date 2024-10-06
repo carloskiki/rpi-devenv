@@ -16,8 +16,6 @@ const GPSET1: usize = 0x20200020;
 const GPCLR1: usize = 0x2020002C;
 
 const TIMER_FOUR_SEC: u32 = 0x400000;
-const SYS_TIMER_BASE: usize = 0x20003000;
-const CLO: usize = SYS_TIMER_BASE + 0x04;
 
 global_asm!(include_str!("boot.s"), options(raw));
 

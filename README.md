@@ -14,3 +14,13 @@
     provides a good overview of the BCM2835 System Timer, which is used in the Raspberry Pi zero v1.3.
 - [Embedded Xinu](https://embedded-xinu.readthedocs.io/en/latest/Introduction.html) A great research implementation
     on the BCM2835 and more ...
+- [Linker Script mcyoung](https://mcyoung.xyz/2021/06/01/linker-script/) A great blog post about linker scripts
+    and how they work.
+- [Linux Insides](https://0xax.gitbooks.io/linux-insides/content/index.html) A great book about the Linux kernel
+    and how it works.
+
+## TODOs
+- [ ] Have a chain loader.
+- [ ] Setup interrupt handling.
+- [ ] Have Async GPIO handling.
+- [ ] Understand JTAG - to implement it.
