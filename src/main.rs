@@ -40,11 +40,9 @@ pub extern "C" fn first_stage() -> ! {
 
     let mut uart = uart::MiniUart::get().unwrap();
     uart.set_bit_mode(true);
-    let _ = Pin::<14, Alternate5>::get();
-    // uart.set_baud_rate(115200);
-    // let mut transmitter = uart.enable_transmitter(Pin::get().unwrap());
-
-    // transmitter.send_blocking("hello world\n".bytes());
+    uart.set_baud_rate(115200);
+    let mut transmitter = uart.enable_transmitter(Pin::get().unwrap());
+    transmitter.send_blocking("hello world\n".bytes());
 
     panic!();
 }

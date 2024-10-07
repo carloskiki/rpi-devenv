@@ -1,9 +1,9 @@
 use core::{
     ptr::{read_volatile, write_volatile},
-    sync::atomic::{AtomicU32, Ordering},
+    sync::atomic::AtomicU32,
 };
 
-use crate::{delay, mem_barrier};
+use crate::mem_barrier;
 
 const FUNCTION_SELECT_BASE: *mut u32 = 0x20200000 as *mut u32;
 
@@ -27,10 +27,12 @@ impl<const PIN: u8, T: sealed::PinType> Pin<PIN, T> {
     pub fn get() -> Option<Self> {
         const { assert!(PIN < 28, "invalid pin number, only pins 0-27 are valid.") };
 
-        let mask = 1 << PIN;
-        if GPIO_USED_SET.fetch_or(mask, Ordering::Acquire) & mask != 0 {
-            return None;
-        }
+        // Lock the GPIO pin for exclusive use. Need MMU enabled for this to work.
+        // TODO: Implement this when MMU is enabled.
+        // let mask = 1 << PIN;
+        // if GPIO_USED_SET.fetch_or(mask, Ordering::Acquire) & mask != 0 {
+        //     return None;
+        // }
 
         // Safety: The PIN constant is checked to be less than 28, so the offset is always in bounds.
         let address = unsafe { FUNCTION_SELECT_BASE.add(PIN as usize / 10) };
@@ -55,8 +57,9 @@ impl<const PIN: u8, T: sealed::PinType> Pin<PIN, T> {
 
 impl<const PIN: u8, T> Drop for Pin<PIN, T> {
     fn drop(&mut self) {
-        let mask = 1 << PIN;
-        GPIO_USED_SET.fetch_and(!mask, Ordering::Release);
+        // TODO: Implement this when MMU is enabled.
+        // let mask = 1 << PIN;
+        // GPIO_USED_SET.fetch_and(!mask, Ordering::Release);
     }
 }
 

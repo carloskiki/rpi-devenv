@@ -24,3 +24,12 @@
 - [ ] Setup interrupt handling.
 - [ ] Have Async GPIO handling.
 - [ ] Understand JTAG - to implement it.
+
+Steps to follow:
+- Have a working chain loader.
+- Have a working JTAG debugger.
+- Enable memory maps
+- Enable CAS Atomic in the GPIO interface.
+
+## Notes
+- I need the MMU in order to use CAS (Compare and Swap) instructions.

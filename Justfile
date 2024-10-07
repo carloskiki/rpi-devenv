@@ -18,4 +18,5 @@ eject:
     diskutil eject $OUT_DRIVE
 
 qemu: build
-    qemu-system-arm -m 512 -M raspi0 -serial stdio -kernel kernel.img
+    qemu-system-arm -M raspi0 -kernel kernel.img -serial null -serial stdio
+    
