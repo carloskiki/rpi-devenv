@@ -54,6 +54,27 @@ impl MiniUart<false, false> {
         })
     }
 
+    /// Get the Mini UART without acquiring its lock.
+    /// 
+    /// This is unsafe as you must make sure that this is the only instance of the Mini UART.
+    /// Otherwise, the Mini UART will be in an inconsistent state. _Even if unused, having
+    /// multiple instances of the Mini UART will cause undefined behaviour._
+    pub unsafe fn get_unlocked() -> Self {
+        // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
+        // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
+        //
+        // Disable the Mini UART RX and TX.
+        unsafe { put32(AUX_MU_CNTL_REG, 0) };
+        
+        Self {
+            baud_rate: 0,
+            eight_bits: false,
+            lock: MiniUartLock,
+            transmitter_pin: None,
+            receiver_pin: None,
+        }
+    }
+
     pub fn set_baud_rate(&mut self, baud_rate: u32) {
         assert!((476..=31_250_000).contains(&baud_rate), "baud rate not in the range 476..=31_250_000");
         let baud_rate_reg = (CLOCK_SPEED / (8 * baud_rate)) - 1;
@@ -245,6 +266,7 @@ impl<const RX_ENABLE: bool, const TX_ENABLE: bool> MiniUart<RX_ENABLE, TX_ENABLE
 
 struct MiniUartLock;
 
+// This exists because you can't destruct structs that `impl Drop`
 impl MiniUartLock {
     fn get() -> Option<Self> {
         // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set

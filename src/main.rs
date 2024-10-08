@@ -38,13 +38,14 @@ pub extern "C" fn first_stage() -> ! {
         put32(GPCLR1, 1 << 15);
     }
 
-    let mut uart = uart::MiniUart::get().unwrap();
+    // Safety: QEMU being a bitch
+    let mut uart = unsafe { uart::MiniUart::get_unlocked() };
     uart.set_bit_mode(true);
     uart.set_baud_rate(115200);
     let mut transmitter = uart.enable_transmitter(Pin::get().unwrap());
     transmitter.send_blocking("hello world\n".bytes());
 
-    panic!();
+    loop {}
 }
 
 #[export_name = "rust_irq_handler"]

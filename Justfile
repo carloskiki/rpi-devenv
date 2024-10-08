@@ -5,8 +5,8 @@ set shell := ["zsh", "-cu"]
 default: build copy eject
 
 # Build the binary `kernel.img` file
-build:
-    cargo build --release
+build *BUILD_ARGS:
+    cargo build {{BUILD_ARGS}}
     rust-objcopy target/arm-none-eabihf/release/rpi -O binary kernel.img
 
 # Copy the binary file to specified drive
@@ -17,6 +17,7 @@ copy:
 eject:
     diskutil eject $OUT_DRIVE
 
-qemu: build
-    qemu-system-arm -M raspi0 -kernel kernel.img -serial null -serial stdio
-    
+qemu *EXTRA_ARGS:
+    cargo build
+    cp target/arm-none-eabihf/debug/rpi kernel.img
+    qemu-system-arm -M raspi0 {{EXTRA_ARGS}} -kernel kernel.img 
