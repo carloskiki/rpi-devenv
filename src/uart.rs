@@ -1,61 +1,71 @@
-use crate::{get32, gpio::{Alternate5, Pin}, mem_barrier, put32};
+use core::{
+    convert::Infallible,
+    ptr::{read_volatile, write_volatile},
+};
+
+use crate::{
+    gpio::{Alternate5, Pin},
+    impl_sealed, mem_barrier, Sealed,
+};
 
 const CLOCK_SPEED: u32 = 250_000_000;
 
 /// Auxiliary Interrupt status
-const AUX_IRQ: usize = 0x20215000;
+const AUX_IRQ: *mut u32 = 0x20215000 as _;
 /// Auxiliary enables
-const AUX_ENABLES: usize = 0x20215004;
+const AUX_ENABLES: *mut u32 = 0x20215004 as _;
 /// Mini Uart I/O Data
-const AUX_MU_IO_REG: usize = 0x20215040;
+const AUX_MU_IO_REG: *mut u32 = 0x20215040 as _;
 /// Mini Uart Interrupt Enable
-const AUX_MU_IER_REG: usize = 0x20215044;
+const AUX_MU_IER_REG: *mut u32 = 0x20215044 as _;
 /// Mini Uart Interrupt Identify
-const AUX_MU_IIR_REG: usize = 0x20215048;
+const AUX_MU_IIR_REG: *mut u32 = 0x20215048 as _;
 /// Mini Uart Line Control
-const AUX_MU_LCR_REG: usize = 0x2021504C;
+const AUX_MU_LCR_REG: *mut u32 = 0x2021504C as _;
 /// Mini Uart Modem Control
-const AUX_MU_MCR_REG: usize = 0x20215050;
+const AUX_MU_MCR_REG: *mut u32 = 0x20215050 as _;
 /// Mini Uart Line Status
-const AUX_MU_LSR_REG: usize = 0x20215054;
+const AUX_MU_LSR_REG: *mut u32 = 0x20215054 as _;
 /// Mini Uart Modem Status
-const AUX_MU_MSR_REG: usize = 0x20215058;
+const AUX_MU_MSR_REG: *mut u32 = 0x20215058 as _;
 /// Mini Uart Extra Control
-const AUX_MU_CNTL_REG: usize = 0x20215060;
-/// Mini Uart Extra Status 
-const AUX_MU_STAT_REG: usize = 0x20215064;
+const AUX_MU_CNTL_REG: *mut u32 = 0x20215060 as _;
+/// Mini Uart Extra Status
+const AUX_MU_STAT_REG: *mut u32 = 0x20215064 as _;
 /// Mini Uart Baudrate
-const AUX_MU_BAUD_REG: usize = 0x20215068;
+const AUX_MU_BAUD_REG: *mut u32 = 0x20215068 as _;
 
-pub struct MiniUart<const RX_ENABLE: bool, const TX_ENABLE: bool>{
+pub struct MiniUart<RxPin, TxPin> {
     baud_rate: u32,
     eight_bits: bool,
     lock: MiniUartLock,
-    transmitter_pin: Option<Pin<14, Alternate5>>,
-    receiver_pin: Option<Pin<15, Alternate5>>,
+    transmitter_pin: TxPin,
+    receiver_pin: RxPin,
 }
 
-impl MiniUart<false, false> {
-    pub fn get() -> Option<Self> {
+impl MiniUart<(), ()> {
+    pub fn get() -> Option<MiniUart<(), ()>> {
         let lock = MiniUartLock::get()?;
         // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
         // appropriately. A new `Uart` instance is not created if the peripheral is already in use.
         // A memory barrier is used according to the BCM2835 manual section 1.3.
         //
         // Disable the Mini UART RX and TX.
-        unsafe { put32(AUX_MU_CNTL_REG, 0) };
-        
+        unsafe { write_volatile(AUX_MU_CNTL_REG, 0) };
+
         Some(Self {
             baud_rate: 0,
             eight_bits: false,
             lock,
-            transmitter_pin: None,
-            receiver_pin: None,
+            transmitter_pin: (),
+            receiver_pin: (),
         })
     }
 
     /// Get the Mini UART without acquiring its lock.
-    /// 
+    ///
+    /// # Safety
+    ///
     /// This is unsafe as you must make sure that this is the only instance of the Mini UART.
     /// Otherwise, the Mini UART will be in an inconsistent state. _Even if unused, having
     /// multiple instances of the Mini UART will cause undefined behaviour._
@@ -64,19 +74,24 @@ impl MiniUart<false, false> {
         // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
         //
         // Disable the Mini UART RX and TX.
-        unsafe { put32(AUX_MU_CNTL_REG, 0) };
-        
+        unsafe { write_volatile(AUX_MU_CNTL_REG, 0) };
+
         Self {
             baud_rate: 0,
             eight_bits: false,
             lock: MiniUartLock,
-            transmitter_pin: None,
-            receiver_pin: None,
+            transmitter_pin: (),
+            receiver_pin: (),
         }
     }
+}
 
+impl<RxPin, TxPin> MiniUart<RxPin, TxPin> {
     pub fn set_baud_rate(&mut self, baud_rate: u32) {
-        assert!((476..=31_250_000).contains(&baud_rate), "baud rate not in the range 476..=31_250_000");
+        assert!(
+            (476..=31_250_000).contains(&baud_rate),
+            "baud rate not in the range 476..=31_250_000"
+        );
         let baud_rate_reg = (CLOCK_SPEED / (8 * baud_rate)) - 1;
         // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
         // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
@@ -85,7 +100,7 @@ impl MiniUart<false, false> {
         // u16 value.
         unsafe {
             mem_barrier();
-            put32(AUX_MU_BAUD_REG, baud_rate_reg);
+            write_volatile(AUX_MU_BAUD_REG, baud_rate_reg);
         }
         self.baud_rate = baud_rate;
     }
@@ -95,166 +110,11 @@ impl MiniUart<false, false> {
         // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
         unsafe {
             mem_barrier();
-            put32(AUX_MU_LCR_REG, if eight_bits { 3 } else { 0 });
+            write_volatile(AUX_MU_LCR_REG, if eight_bits { 3 } else { 0 });
         }
         self.eight_bits = eight_bits;
     }
-}
 
-impl<const TX_ENABLE: bool> MiniUart<false, TX_ENABLE> {
-    /// Enable the Mini UART receiver without providing a valid pin.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure that a Mini UART receiver pin is properly configured in order to
-    /// receive data.
-    pub unsafe fn enable_receiver_no_pin(self) -> MiniUart<true, TX_ENABLE> {
-        // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
-        // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
-        unsafe {
-            mem_barrier();
-            put32(AUX_MU_CNTL_REG, ((TX_ENABLE as u32) << 1) | 1);
-            put32(AUX_MU_IIR_REG, 0b10);
-        }
-        MiniUart {
-            baud_rate: self.baud_rate,
-            eight_bits: self.eight_bits,
-            lock: self.lock,
-            transmitter_pin: self.transmitter_pin,
-            receiver_pin: None,
-        }
-    }
-
-    pub fn enable_receiver(self, pin: Pin<15, Alternate5>) -> MiniUart<true, TX_ENABLE> {
-        // Safety: We have a valid pin, so we can safely call `enable_receiver_no_pin`.
-        let mut rx_enabled = unsafe { self.enable_receiver_no_pin() };
-        rx_enabled.receiver_pin = Some(pin);
-        rx_enabled
-    }
-}
-
-impl<const RX_ENABLE: bool> MiniUart<RX_ENABLE, false> {
-    /// Enable the Mini UART transmitter without providing a valid pin.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure that a Mini UART transmitter pin is properly configured in order
-    /// to send data.
-    pub unsafe fn enable_transmitter_no_pin(self) -> MiniUart<RX_ENABLE, true> {
-        // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
-        // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
-        unsafe {
-            mem_barrier();
-            put32(AUX_MU_CNTL_REG, 0b10 | RX_ENABLE as u32);
-            put32(AUX_MU_IIR_REG, 0b100);
-        }
-        MiniUart {
-            baud_rate: self.baud_rate,
-            eight_bits: self.eight_bits,
-            lock: self.lock,
-            transmitter_pin: None,
-            receiver_pin: self.receiver_pin,
-        }
-    }
-
-    pub fn enable_transmitter(self, pin: Pin<14, Alternate5>) -> MiniUart<RX_ENABLE, true> {
-        // Safety: We have a valid pin, so we can safely call `enable_transmitter_no_pin`.
-        let mut tx_enabled = unsafe { self.enable_transmitter_no_pin() };
-        tx_enabled.transmitter_pin = Some(pin);
-        tx_enabled
-    }
-}
-
-impl<const TX_ENABLE: bool> MiniUart<true, TX_ENABLE> {
-    pub fn receive(&mut self, buf: &mut [u8]) -> usize {
-        for (i, byte) in buf.iter_mut().enumerate() {
-            if unsafe { get32(AUX_MU_LSR_REG) } & 1 == 0 {
-                return i;
-            }
-            *byte = unsafe { get32(AUX_MU_IO_REG) as u8 };
-        }
-        buf.len()
-    }
-
-    pub fn receive_exact(&mut self, buf: &mut [u8]) {
-        for byte in buf {
-            while unsafe { get32(AUX_MU_LSR_REG) } & 1 == 0 {}
-            *byte = unsafe { get32(AUX_MU_IO_REG) as u8 };
-        }
-    }
-
-    /// Disable the Mini UART receiver.
-    ///
-    /// Drops the receiver pin if it was used.
-    pub fn disable_receiver(self) -> MiniUart<false, TX_ENABLE> {
-        // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
-        // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
-        unsafe {
-            mem_barrier();
-            put32(AUX_MU_CNTL_REG, (TX_ENABLE as u32) << 1);
-        }
-        MiniUart {
-            baud_rate: self.baud_rate,
-            eight_bits: self.eight_bits,
-            lock: self.lock,
-            transmitter_pin: self.transmitter_pin,
-            receiver_pin: None,
-        }
-    }
-}
-
-impl<const RX_ENABLE: bool> MiniUart<RX_ENABLE, true> {
-    pub fn send_blocking(&mut self, bytes: impl Iterator<Item = u8>) {
-        // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
-        // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
-        unsafe { mem_barrier() }; 
-        
-        for byte in bytes {
-            unsafe {
-                while get32(AUX_MU_LSR_REG) & 0x20 == 0 {}
-                put32(AUX_MU_IO_REG, byte as u32);
-            }
-        }
-    }
-
-    pub fn send(&mut self, bytes: &mut impl Iterator<Item = u8>) -> usize {
-        // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
-        // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
-        let mut sent = 0;
-        unsafe { mem_barrier() };
-        for byte in bytes {
-            unsafe {
-                if get32(AUX_MU_LSR_REG) & 0x20 == 0 {
-                    break;
-                }
-                put32(AUX_MU_IO_REG, byte as u32);
-                sent += 1;
-            }
-        }
-        sent
-    }
-
-    /// Disable the Mini UART transmitter.
-    ///
-    /// Drops the transmitter pin if it was used.
-    pub fn disable_transmitter(self) -> MiniUart<RX_ENABLE, false> {
-        // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
-        // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
-        unsafe {
-            mem_barrier();
-            put32(AUX_MU_CNTL_REG, RX_ENABLE as u32);
-        }
-        MiniUart {
-            baud_rate: self.baud_rate,
-            eight_bits: self.eight_bits,
-            lock: self.lock,
-            transmitter_pin: None,
-            receiver_pin: self.receiver_pin,
-        }
-    }
-}
-    
-impl<const RX_ENABLE: bool, const TX_ENABLE: bool> MiniUart<RX_ENABLE, TX_ENABLE> {
     pub fn baud_rate(&self) -> u32 {
         self.baud_rate
     }
@@ -264,21 +124,217 @@ impl<const RX_ENABLE: bool, const TX_ENABLE: bool> MiniUart<RX_ENABLE, TX_ENABLE
     }
 }
 
-struct MiniUartLock;
+impl<RxPin, TxPin> MiniUart<RxPin, TxPin>
+where
+    RxPin: MiniUartRxPin<Enabled = False>,
+    TxPin: MiniUartTxPin,
+{
+    /// Enable the Mini UART receiver without providing a valid pin.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that a Mini UART receiver pin is properly configured in order to
+    /// receive data.
+    #[allow(private_interfaces)]
+    pub unsafe fn enable_receiver_no_pin(self) -> MiniUart<UnsafeRxPin, TxPin> {
+        // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
+        // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
+        unsafe {
+            mem_barrier();
+            write_volatile(AUX_MU_CNTL_REG, ((TxPin::ENABLED as u32) << 1) | 1);
+            write_volatile(AUX_MU_IIR_REG, 0b10);
+        }
+
+        MiniUart {
+            baud_rate: self.baud_rate,
+            eight_bits: self.eight_bits,
+            lock: self.lock,
+            transmitter_pin: self.transmitter_pin,
+            receiver_pin: UnsafeRxPin,
+        }
+    }
+
+    pub fn enable_receiver<Rx: MiniUartRxPin>(self, pin: Rx) -> MiniUart<Rx, TxPin> {
+        // Safety: We have a valid pin, so we can safely call `enable_receiver_no_pin`.
+        let rx_enabled = unsafe { self.enable_receiver_no_pin() };
+        MiniUart {
+            baud_rate: rx_enabled.baud_rate,
+            eight_bits: rx_enabled.eight_bits,
+            lock: rx_enabled.lock,
+            transmitter_pin: rx_enabled.transmitter_pin,
+            receiver_pin: pin,
+        }
+    }
+}
+
+impl<RxPin, TxPin> MiniUart<RxPin, TxPin>
+where
+    RxPin: MiniUartRxPin,
+    TxPin: MiniUartTxPin<Enabled = False>,
+{
+    /// Enable the Mini UART transmitter without providing a valid pin.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that a Mini UART transmitter pin is properly configured in order
+    /// to send data.
+    #[allow(private_interfaces)]
+    pub unsafe fn enable_transmitter_no_pin(self) -> MiniUart<RxPin, UnsafeTxPin> {
+        // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
+        // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
+        unsafe {
+            mem_barrier();
+            write_volatile(AUX_MU_CNTL_REG, 0b10 | RxPin::ENABLED as u32);
+            write_volatile(AUX_MU_IIR_REG, 0b100);
+        }
+        MiniUart {
+            baud_rate: self.baud_rate,
+            eight_bits: self.eight_bits,
+            lock: self.lock,
+            transmitter_pin: UnsafeTxPin,
+            receiver_pin: self.receiver_pin,
+        }
+    }
+
+    /// Enable the Mini UART transmitter with a valid pin.
+    pub fn enable_transmitter<P: MiniUartTxPin>(self, pin: P) -> MiniUart<RxPin, P> {
+        // Safety: We have a valid pin, so we can safely call `enable_transmitter_no_pin`.
+        let tx_enabled = unsafe { self.enable_transmitter_no_pin() };
+        MiniUart {
+            baud_rate: tx_enabled.baud_rate,
+            eight_bits: tx_enabled.eight_bits,
+            lock: tx_enabled.lock,
+            transmitter_pin: pin,
+            receiver_pin: tx_enabled.receiver_pin,
+        }
+    }
+}
+
+impl<RxPin, TxPin> MiniUart<RxPin, TxPin>
+where
+    RxPin: MiniUartRxPin<Enabled = True>,
+    TxPin: MiniUartTxPin,
+{
+    /// Receive data from the Mini UART.
+    ///
+    /// This method will not block, so as little as 0 bytes may be received, and as many as the
+    /// buffer can hold. The number of bytes received is returned.
+    pub fn receive(&mut self, buf: &mut [u8]) -> usize {
+        for (i, byte) in buf.iter_mut().enumerate() {
+            // Safety: Only addresses defined in the BCM2835 manual are accessed.
+            if unsafe { read_volatile(AUX_MU_LSR_REG) } & 1 == 0 {
+                return i;
+            }
+            // Safety: Only addresses defined in the BCM2835 manual are accessed.
+            *byte = unsafe { read_volatile(AUX_MU_IO_REG) as u8 };
+        }
+        buf.len()
+    }
+
+    /// Receive exactly `buf.len()` bytes from the Mini UART.
+    ///
+    /// This method will block until `buf.len()` bytes are received.
+    pub fn receive_exact(&mut self, buf: &mut [u8]) {
+        // Safety: Memory barriers are used according to the BCM2835 manual section 1.3.
+        unsafe { mem_barrier() };
+        for byte in buf {
+            // Safety: Only addresses defined in the BCM2835 manual are accessed.
+            while unsafe { read_volatile(AUX_MU_LSR_REG) } & 1 == 0 {}
+            // Safety: Only addresses defined in the BCM2835 manual are accessed.
+            *byte = unsafe { read_volatile(AUX_MU_IO_REG) as u8 };
+        }
+    }
+
+    /// Disable the Mini UART receiver.
+    ///
+    /// Drops the receiver pin if it was used.
+    pub fn disable_receiver(self) -> MiniUart<(), TxPin> {
+        // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
+        // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
+        unsafe {
+            mem_barrier();
+            write_volatile(AUX_MU_CNTL_REG, (TxPin::ENABLED as u32) << 1);
+        }
+        MiniUart {
+            baud_rate: self.baud_rate,
+            eight_bits: self.eight_bits,
+            lock: self.lock,
+            transmitter_pin: self.transmitter_pin,
+            receiver_pin: (),
+        }
+    }
+}
+
+impl<RxPin, TxPin> MiniUart<RxPin, TxPin>
+where
+    RxPin: MiniUartRxPin,
+    TxPin: MiniUartTxPin<Enabled = True>,
+{
+    pub fn send_blocking(&mut self, bytes: impl Iterator<Item = u8>) {
+        // Safety: A memory barrier is used according to the BCM2835 manual section 1.3.
+        unsafe { mem_barrier() };
+
+        for byte in bytes {
+            // Safety: Only addresses defined in the BCM2835 manual are accessed.
+            unsafe {
+                while read_volatile(AUX_MU_LSR_REG) & 0x20 == 0 {}
+                write_volatile(AUX_MU_IO_REG, byte as u32);
+            }
+        }
+    }
+
+    pub fn send(&mut self, bytes: &mut impl Iterator<Item = u8>) -> usize {
+        let mut sent = 0;
+        // Safety: Memory barriers are used according to the BCM2835 manual section 1.3.
+        unsafe { mem_barrier() };
+        for byte in bytes {
+            // Safety: Only addresses defined in the BCM2835 manual are accessed.
+            unsafe {
+                if read_volatile(AUX_MU_LSR_REG) & 0x20 == 0 {
+                    break;
+                }
+                write_volatile(AUX_MU_IO_REG, byte as u32);
+                sent += 1;
+            }
+        }
+        sent
+    }
+
+    /// Disable the Mini UART transmitter.
+    ///
+    /// Drops the transmitter pin if it was used.
+    pub fn disable_transmitter(self) -> MiniUart<RxPin, ()> {
+        // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
+        // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
+        unsafe {
+            mem_barrier();
+            write_volatile(AUX_MU_CNTL_REG, RxPin::ENABLED as u32);
+        }
+        MiniUart {
+            baud_rate: self.baud_rate,
+            eight_bits: self.eight_bits,
+            lock: self.lock,
+            transmitter_pin: (),
+            receiver_pin: self.receiver_pin,
+        }
+    }
+}
 
 // This exists because you can't destruct structs that `impl Drop`
+struct MiniUartLock;
+
 impl MiniUartLock {
     fn get() -> Option<Self> {
         // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
         // appropriately. A new `Uart` instance is not created if the peripheral is already in use.
         // A memory barrier is used according to the BCM2835 manual section 1.3.
         unsafe {
-            let enable_state = get32(AUX_ENABLES);
+            let enable_state = read_volatile(AUX_ENABLES);
             if enable_state & 1 != 0 {
                 return None;
             }
             mem_barrier();
-            put32(AUX_ENABLES, enable_state | 1);
+            write_volatile(AUX_ENABLES, enable_state | 1);
         }
         Some(Self)
     }
@@ -289,29 +345,64 @@ impl Drop for MiniUartLock {
         // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
         // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
         unsafe {
-            let enable_state = get32(AUX_ENABLES);
+            let enable_state = read_volatile(AUX_ENABLES);
             mem_barrier();
-            put32(AUX_ENABLES, enable_state & !1);
+            write_volatile(AUX_ENABLES, enable_state & !1);
         }
     }
 }
 
-// Notice about memory ordering: 
-// The BCM2835 system uses an AMBA AXI-compatible interface structure. In order to keep
-// the system complexity low and data throughput high, the BCM2835 AXI system does not
-// always return read data in-order2
-// . The GPU has special logic to cope with data arriving outof-order; however the ARM core does not contain such logic.
-// Therefore some precautions must be taken when using the ARM to access peripherals.
-// Accesses to the same peripheral will always arrive and return in-order. It is only when
-// switching from one peripheral to another that data can arrive out-of-order. The simplest way
-// to make sure that data is processed in-order is to place a memory barrier instruction at critical
-// positions in the code. You should place:
-// • A memory write barrier before the first write to a peripheral.
-// • A memory read barrier after the last read of a peripheral.
-// It is not required to put a memory barrier instruction after each read or write access. Only at
-// those places in the code where it is possible that a peripheral read or write may be followed
-// by a read or write of a different peripheral. This is normally at the entry and exit points of the
-// peripheral service code.
-// As interrupts can appear anywhere in the code so you should safeguard those. If an interrupt
-// routine reads from a peripheral the routine should start with a memory read barrier. If an
-// interrupt routine writes to a peripheral the routine should end with a memory write barrier. 
+struct UnsafeRxPin;
+struct UnsafeTxPin;
+impl_sealed!(UnsafeRxPin, UnsafeTxPin);
+
+type True = ();
+type False = Infallible;
+
+/// GPIO [`Pin`]s that can be used for the Mini UART as a receiver.
+#[allow(private_bounds)]
+pub trait MiniUartRxPin: Sealed {
+    type Enabled;
+    const ENABLED: bool = true;
+}
+/// GPIO [`Pin`]s that can be used for the Mini UART as a transmitter.
+#[allow(private_bounds)]
+pub trait MiniUartTxPin: Sealed {
+    type Enabled;
+    const ENABLED: bool = true;
+}
+
+// See the BCM2835 manual section 6.2 for the pin mappings.
+impl MiniUartRxPin for Pin<15, Alternate5> {
+    type Enabled = True;
+}
+impl MiniUartRxPin for Pin<33, Alternate5> {
+    type Enabled = True;
+}
+impl MiniUartRxPin for Pin<41, Alternate5> {
+    type Enabled = True;
+}
+impl MiniUartRxPin for UnsafeRxPin {
+    type Enabled = True;
+}
+impl MiniUartRxPin for () {
+    type Enabled = False;
+    const ENABLED: bool = false;
+}
+
+impl MiniUartTxPin for Pin<14, Alternate5> {
+    type Enabled = True;
+}
+impl MiniUartTxPin for Pin<32, Alternate5> {
+    type Enabled = True;
+}
+impl MiniUartTxPin for Pin<40, Alternate5> {
+    type Enabled = True;
+}
+impl MiniUartTxPin for UnsafeTxPin {
+    type Enabled = True;
+}
+impl MiniUartTxPin for () {
+    type Enabled = False;
+    const ENABLED: bool = false;
+}

@@ -90,6 +90,8 @@ irq:
  * peripherals, as documented on page 7 of the "BCM2835 ARM Peripherals"
  * document.  As documented, it is only needed when switching between
  * _different_ peripherals.
+ *
+    * TODO: When confident rewrite this in inline asm!.
  */
 mem_barrier:
 	mov	r12, #0
