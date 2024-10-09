@@ -154,7 +154,13 @@ where
         }
     }
 
-    pub fn enable_receiver<Rx: MiniUartRxPin>(self, pin: Rx) -> MiniUart<Rx, TxPin> {
+    pub fn enable_receiver<const N: u8>(
+        self,
+        pin: Pin<N, Alternate5>,
+    ) -> MiniUart<Pin<N, Alternate5>, TxPin>
+    where
+        Pin<N, Alternate5>: MiniUartRxPin,
+    {
         // Safety: We have a valid pin, so we can safely call `enable_receiver_no_pin`.
         let rx_enabled = unsafe { self.enable_receiver_no_pin() };
         MiniUart {
@@ -197,7 +203,13 @@ where
     }
 
     /// Enable the Mini UART transmitter with a valid pin.
-    pub fn enable_transmitter<P: MiniUartTxPin>(self, pin: P) -> MiniUart<RxPin, P> {
+    pub fn enable_transmitter<const N: u8>(
+        self,
+        pin: Pin<N, Alternate5>,
+    ) -> MiniUart<RxPin, Pin<N, Alternate5>>
+    where
+        Pin<N, Alternate5>: MiniUartTxPin,
+    {
         // Safety: We have a valid pin, so we can safely call `enable_transmitter_no_pin`.
         let tx_enabled = unsafe { self.enable_transmitter_no_pin() };
         MiniUart {
