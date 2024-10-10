@@ -3,9 +3,9 @@
 
 use core::{arch::global_asm, hint::black_box};
 
+use rpi::gpio::{Alternate5, Pin};
 use rpi::mem_barrier;
 use rpi::uart::MiniUart;
-use rpi::gpio::{Alternate5, Pin};
 
 // const GPFSEL3: usize = 0x2020000C;
 const GPFSEL4: usize = 0x20200010;
@@ -14,32 +14,19 @@ const GPCLR1: usize = 0x2020002C;
 
 const TIMER_FOUR_SEC: u32 = 0x400000;
 
+const BOOT_ADDRESS: usize = 0x8000;
+
 global_asm!(include_str!("boot.s"), options(raw));
 
 #[no_mangle]
 pub extern "C" fn first_stage() -> ! {
-    // Set GPIO pin 47 as output
-    unsafe {
-        get32(GPFSEL4);
-        let mask = 0b111 << 21;
-        let output = 0b001 << 21;
-        put32(GPFSEL4, (get32(GPFSEL4) & !mask) | output);
-    }
-
-    // Turn on the LED
-    unsafe {
-        put32(GPCLR1, 1 << 15);
-    }
-
     // Safety: QEMU being a bitch
     let mut uart = unsafe { MiniUart::get_unlocked() };
     uart.set_bit_mode(true);
     uart.set_baud_rate(115200);
     let tx_pin: Pin<14, Alternate5> = Pin::get().unwrap();
     let rx_pin: Pin<15, Alternate5> = Pin::get().unwrap();
-    let mut rx_tx = uart
-        .enable_transmitter(tx_pin)
-        .enable_receiver(rx_pin);
+    let mut rx_tx = uart.enable_transmitter(tx_pin).enable_receiver(rx_pin);
     rx_tx.send_blocking("hello world\n".bytes());
     let mut byte = [0];
     loop {
@@ -81,6 +68,14 @@ pub extern "C" fn irq_handler() {}
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     unsafe { mem_barrier() };
 
+    // Set GPIO pin 47 as output
+    unsafe {
+        get32(GPFSEL4);
+        let mask = 0b111 << 21;
+        let output = 0b001 << 21;
+        put32(GPFSEL4, (get32(GPFSEL4) & !mask) | output);
+    }
+
     loop {
         // Turn off the LED
         unsafe {
@@ -95,4 +90,3 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
         delay(TIMER_FOUR_SEC);
     }
 }
-

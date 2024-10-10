@@ -5,9 +5,9 @@ set shell := ["zsh", "-cu"]
 default: build copy eject
 
 # Build the binary `kernel.img` file
-build *BUILD_ARGS:
-    cargo build {{BUILD_ARGS}}
-    rust-objcopy target/arm-none-eabihf/release/rpi -O binary kernel.img
+build:
+    cargo build --release
+    rust-objcopy -S target/arm-none-eabihf/release/rpi -O binary kernel.img
 
 # Copy the binary file to specified drive
 copy:

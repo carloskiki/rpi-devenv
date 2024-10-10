@@ -16,3 +16,9 @@ bitflags = "2.5"
 name = "rpi"
 test = false
 bench = false
+
+# Optimize for size
+# [profile.release]
+# lto = true
+# codegen-units = 1
+# opt-level = "z"
