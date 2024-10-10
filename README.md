@@ -36,3 +36,7 @@ Steps to follow:
 
 - When running with QEMU, the AUX_ENABLES register is already enabled, so when we try to acquire the lock
     we fail and panic, which is why we couldn't see the uart output to stdio before. Interesting.
+
+## The Bootloader
+
+The simplest bootloader possible. It waits for data coming from the UART in a busy loop.
