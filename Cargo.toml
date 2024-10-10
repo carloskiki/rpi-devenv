@@ -17,6 +17,11 @@ name = "rpi"
 test = false
 bench = false
 
+[[bin]]
+name = "bootloader"
+test = false
+bench = false
+
 # Optimize for size
 # [profile.release]
 # lto = true

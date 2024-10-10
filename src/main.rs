@@ -21,7 +21,7 @@ global_asm!(include_str!("boot.s"), options(raw));
 #[no_mangle]
 pub extern "C" fn first_stage() -> ! {
     // Safety: QEMU being a bitch
-    let mut uart = unsafe { MiniUart::get_unlocked() };
+    let mut uart = unsafe { MiniUart::get_unchecked() };
     uart.set_bit_mode(true);
     uart.set_baud_rate(115200);
     let tx_pin: Pin<14, Alternate5> = Pin::get().unwrap();

@@ -69,7 +69,7 @@ impl MiniUart<(), ()> {
     /// This is unsafe as you must make sure that this is the only instance of the Mini UART.
     /// Otherwise, the Mini UART will be in an inconsistent state. _Even if unused, having
     /// multiple instances of the Mini UART will cause undefined behaviour._
-    pub unsafe fn get_unlocked() -> Self {
+    pub unsafe fn get_unchecked() -> Self {
         // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
         // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
         //
