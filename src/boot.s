@@ -16,7 +16,7 @@ swi_handler:        .word hang
 prefetch_handler:   .word hang
 data_handler:       .word hang
 unused_handler:     .word hang
-irq_handler:        .word irq
+irq_handler:        .word hang
 fiq_handler:        .word hang
 
 reset:
@@ -60,13 +60,6 @@ zero_bss:
 
 hang:
     b hang
-
-irq:
-    push {r0,r1,r2,r3,r4,r5,r6,r7,r8,r9,r10,r11,r12,lr}
-    bl rust_irq_handler
-    pop  {r0,r1,r2,r3,r4,r5,r6,r7,r8,r9,r10,r11,r12,lr}
-    subs pc,lr,#4
-
 
 .globl mem_barrier
 

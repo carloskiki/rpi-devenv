@@ -11,7 +11,10 @@
     "linker-flavor": "gcc",
     "pre-link-args": {
         "gcc": [
-            "-nostdlib"
+            "-nostartfiles",
+            "-mfloat-abi=hard",
+            "-mfpu=vfp",
+            "-march=armv6zk"
         ]
     },
     "linker": "arm-none-eabi-gcc",

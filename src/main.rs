@@ -61,9 +61,6 @@ fn delay(mut n: u32) {
     }
 }
 
-#[export_name = "rust_irq_handler"]
-pub extern "C" fn irq_handler() {}
-
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     unsafe { mem_barrier() };
