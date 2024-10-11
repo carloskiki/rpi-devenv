@@ -1,24 +1,41 @@
 .section ".text.boot"
 
 .globl _start
+// Let's not use r0, r1, r2, for now, I think they hold useful values such as atags, and other stuff.
 _start:
     // Set the stack pointer.
-    mov r0,#0x8000
+    mov sp, #0x8000
 
-    // Zero out the BSS section. This should work even if the BSS section is zero bytes.
-    ldr r0, =__bss_start
-    ldr r1, =__bss_end
-    mov r2, #0
-    bl zero_bss
+    // Relocate ourselves to __relocate_address
+    // The size of the bootloader is __end_data - __start_text.
+relocate:
+    // All of these generate PC-relative instructions, since values defined in the
+    // linker script evaluate to addresses in the final binary.
+    ldr r3, =__physical_load_address
+    ldr r4, =__relocate_address
+    ldr r5, =__data_end
+
+1:
+    ldmia r3!, {r6, r7, r8, r9}
+    stmia r4!, {r6, r7, r8, r9}
+
+    // Check if we're done relocating.
+    cmp r4, r5
+    blo 1b
+
+    // Zero out the BSS section.
+zero_bss:
+    ldr r3, =__bss_start
+    ldr r4, =__bss_end
+    mov r5, #0
+
+1:
+    str r5, [r3], #4
+    cmp r3, r4
+    blo 1b
     
     // Call into Rust.
     b first_stage
-
-zero_bss:
-    cmp r0, r1
-    bxge lr
-    str r2, [r0], #4
-    b zero_bss
 
 .globl mem_barrier
 

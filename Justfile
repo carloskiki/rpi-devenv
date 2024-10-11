@@ -17,7 +17,12 @@ copy:
 eject:
     diskutil eject $OUT_DRIVE
 
-qemu *EXTRA_ARGS:
-    cargo build
-    cp target/arm-none-eabihf/debug/rpi kernel.img
+qemu BIN *EXTRA_ARGS:
+    cargo build --bin {{BIN}}
+    cp target/arm-none-eabihf/debug/{{BIN}} kernel.img
     qemu-system-arm -M raspi0 {{EXTRA_ARGS}} -kernel kernel.img 
+
+bootloader:
+    RUSTFLAGS="-C link-arg=-Tsrc/bin/link.x" cargo build --release --bin bootloader
+    rust-objcopy -S target/arm-none-eabihf/release/bootloader -O binary bootloader.img
+    cp bootloader.img /Volumes/$OUT_DRIVE
