@@ -1,8 +1,8 @@
 [build]
-target = "arm-none-eabihf.json"
+target = "../arm-none-eabihf.json"
 
 [target.arm-none-eabihf]
-rustflags = ["-C", "link-arg=-Tlink.x"]
+rustflags = ["-C", "link-arg=-Tkernel/link.x"]
 
 [unstable]
 build-std = ["core", "compiler_builtins"]

@@ -7,18 +7,22 @@ __physical_load_address = 0x8000;
    receive over UART at the __physical_load_address. */
 __relocate_address = 0x2000000;
 
+MEMORY {
+    ram : ORIGIN = __physical_load_address, LENGTH = 0x100000
+    relocate : ORIGIN = __relocate_address, LENGTH = 0x100000
+}
+
 ENTRY(__physical_load_address)
 SECTIONS
 {
     /* Starts at LOADER_ADDR. */
-    . = __relocate_address;
     __text_start = .;
     .text :
     {
         KEEP(*(.text.boot))
         *(.text)
         *(.text.*)
-    }
+    } > relocate AT>ram
     __text_end = .;
 
     __rodata_start = .;
@@ -26,7 +30,7 @@ SECTIONS
     {
         *(.rodata)
         *(.rodata.*)
-    }
+    } > relocate AT>ram
     __rodata_end = .;
 
     __data_start = .;
@@ -34,7 +38,7 @@ SECTIONS
     { 
         *(.data)
         *(.data.*) 
-    }
+    } > relocate AT>ram
     __data_end = .;
 
     __bss_start = .;
@@ -42,7 +46,7 @@ SECTIONS
     {
         *(.bss)
         *(.bss.*)
-    }
+    } > relocate AT>ram
     __bss_end = .;
     
     /* 

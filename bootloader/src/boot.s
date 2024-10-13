@@ -9,8 +9,6 @@ _start:
     // Relocate ourselves to __relocate_address
     // The size of the bootloader is __end_data - __start_text.
 relocate:
-    // All of these generate PC-relative instructions, since values defined in the
-    // linker script evaluate to addresses in the final binary.
     ldr r3, =__physical_load_address
     ldr r4, =__relocate_address
     ldr r5, =__data_end
@@ -35,7 +33,12 @@ zero_bss:
     blo 1b
     
     // Call into Rust.
-    b first_stage
+    // TODO: All of these generate PC-relative instructions, since values defined in the
+    // linker script evaluate to addresses in the final binary. This is not what we want.
+    // We need to generate an absolute address by first loading the address in a register.
+    // and then branching to it.
+    ldr r3, =first_stage
+    blx r3
 
 .globl mem_barrier
 

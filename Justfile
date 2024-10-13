@@ -2,27 +2,24 @@ set dotenv-load
 set shell := ["zsh", "-cu"]
 
 # Build and copy to external drive
-default: build copy eject
+default BIN="kernel": (build BIN) (copy-img BIN)
 
-# Build the binary `kernel.img` file
-build:
-    cargo build --release
-    rust-objcopy -S target/arm-none-eabihf/release/rpi -O binary kernel.img
+# Build the binary
+build BIN="kernel":
+    cd {{BIN}} && cargo build --release
 
+# Copy the executable as a binary file to the root of the project
+copy-img BIN="kernel":
+    rust-objcopy -S target/arm-none-eabihf/release/{{BIN}} -O binary {{BIN}}.img
+    
 # Copy the binary file to specified drive
-copy:
-    cp kernel.img /Volumes/$OUT_DRIVE
+copy-out BIN="kernel":
+    cp {{BIN}}.img /Volumes/$OUT_DRIVE
 
 # Eject the specified drive
 eject:
     diskutil eject $OUT_DRIVE
 
 qemu BIN *EXTRA_ARGS:
-    cargo build --bin {{BIN}}
-    cp target/arm-none-eabihf/debug/{{BIN}} kernel.img
-    qemu-system-arm -M raspi0 {{EXTRA_ARGS}} -kernel kernel.img 
-
-bootloader:
-    RUSTFLAGS="-C link-arg=-Tsrc/bin/link.x" cargo build --release --bin bootloader
-    rust-objcopy -S target/arm-none-eabihf/release/bootloader -O binary bootloader.img
-    cp bootloader.img /Volumes/$OUT_DRIVE
+    cd {{BIN}} && cargo build
+    qemu-system-arm -M raspi0 {{EXTRA_ARGS}} -kernel target/arm-none-eabihf/debug/{{BIN}}
