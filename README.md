@@ -39,4 +39,14 @@ Steps to follow:
 
 ## The Bootloader
 
-The simplest bootloader possible. It waits for data coming from the UART in a busy loop.
+This is a very simple bootloader (or specifically a chain loader) that loads a binary from the Mini UART.
+
+### Protocol
+
+The bootloader will send a `0xff` byte to signal it is ready to receive the binary. The following four bytes
+must be the size of the binary (in bytes) in little endian format. Upon receiving the binary, the bootloader
+will output a success message to the UART, clean itself up, and jump to the binary.
+
+### Bootcom
+
+You can use the bootcom tool to send the binary to the bootloader.
