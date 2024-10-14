@@ -19,6 +19,8 @@ relocate:
 
     // Check if we're done relocating.
     cmp r4, r5
+    // This break is pc-relative, so it does not use the relocated address.
+    // See: https://sourceware.org/binutils/docs/as/Symbol-Names.html.
     blo 1b
 
     // Zero out the BSS section.
@@ -30,13 +32,12 @@ zero_bss:
 1:
     str r5, [r3], #4
     cmp r3, r4
+    // This break is pc-relative, so it does not use the relocated address.
+    // See: https://sourceware.org/binutils/docs/as/Symbol-Names.html.
     blo 1b
     
     // Call into Rust.
-    // TODO: All of these generate PC-relative instructions, since values defined in the
-    // linker script evaluate to addresses in the final binary. This is not what we want.
-    // We need to generate an absolute address by first loading the address in a register.
-    // and then branching to it.
+    // This uses the relocated address, and is an absolute jump.
     ldr r3, =first_stage
     blx r3
 
@@ -63,7 +64,7 @@ zero_bss:
  * document.  As documented, it is only needed when switching between
  * _different_ peripherals.
  *
-    * TODO: When confident rewrite this in inline asm!.
+* TODO: When confident rewrite this in inline asm!.
  */
 mem_barrier:
 	mov	r12, #0
