@@ -11,7 +11,7 @@ build BIN="kernel":
 
 # Copy the binary file to specified drive
 copy BIN="kernel":
-    cp target/arm-none-eabihf/release/{{BIN}}.img /Volumes/$OUT_DRIVE/{{BIN}}.img
+    cp target/arm-none-eabihf/release/{{BIN}}.img /Volumes/$OUT_DRIVE/kernel.img
 
 # Eject the specified drive
 eject:

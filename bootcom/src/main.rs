@@ -1,4 +1,7 @@
-use std::{io::stdout, time::Duration};
+use std::{
+    io::{copy, stdout},
+    time::Duration,
+};
 
 use serialport::{DataBits, FlowControl, Parity, StopBits};
 
@@ -9,7 +12,7 @@ fn main() {
     let binary_name = args.next().expect("a binary file should be provided");
 
     println!("=> Connecting to the serial port `{port_name}` ...");
-    println!("=> Each operations on the port time out after 60 seconds.");
+    println!("=> Each operation on the port times out after 60 seconds.");
     let mut port = serialport::new(port_name, 115200)
         .data_bits(DataBits::Eight)
         .parity(Parity::None)

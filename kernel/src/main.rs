@@ -1,10 +1,12 @@
 #![no_std]
 #![no_main]
 
+use core::arch::asm;
+use core::iter;
 use core::{arch::global_asm, hint::black_box};
 
+use rpi::data_memory_barrier;
 use rpi::gpio::{Alternate5, Pin};
-use rpi::mem_barrier;
 use rpi::uart::MiniUart;
 
 // const GPFSEL3: usize = 0x2020000C;
@@ -27,11 +29,20 @@ pub extern "C" fn first_stage() -> ! {
     let rx_pin: Pin<15, Alternate5> = Pin::get().unwrap();
     let mut rx_tx = uart.enable_transmitter(tx_pin).enable_receiver(rx_pin);
     rx_tx.send_blocking("hello world\n".bytes());
-    let mut byte = [0];
-    loop {
-        rx_tx.receive_exact(&mut byte[..]);
-        rx_tx.send_blocking(byte.iter().copied());
+
+    let out: i32;
+    unsafe {
+        asm!("MRC p15, 0, {}, c0, c0, 3", out(reg) out);
     }
+    let bytes = out.to_ne_bytes();
+    rx_tx.send_blocking("Separate instruction cache: ".bytes());
+    rx_tx.send_blocking(iter::once(bytes[0] + b'0'));
+    rx_tx.send_blocking("\nData Lockable: ".bytes());
+    rx_tx.send_blocking(iter::once(bytes[1] + b'0'));
+    rx_tx.send_blocking("\nInstruction Lockable: ".bytes());
+    rx_tx.send_blocking(iter::once(bytes[2] + b'0'));
+
+    loop {}
 }
 
 #[repr(u8)]
@@ -62,7 +73,7 @@ fn delay(mut n: u32) {
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
-    unsafe { mem_barrier() };
+    data_memory_barrier();
 
     // Set GPIO pin 47 as output
     unsafe {

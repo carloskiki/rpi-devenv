@@ -1,0 +1,2 @@
+# Set the gpio pins for the JTAG
+gpio=22-27=a4

@@ -16,7 +16,7 @@ test = false
 bench = false
 
 [dependencies]
-bitflags = "2.5"
+bitfield = "0.17"
 
 # Optimize for size
 # [profile.release]

@@ -37,6 +37,8 @@ Steps to follow:
 - When running with QEMU, the AUX_ENABLES register is already enabled, so when we try to acquire the lock
     we fail and panic, which is why we couldn't see the uart output to stdio before. Interesting.
 
+- The theoretical maximal address for the chip is 0x20000000 (512MB)
+
 ## The Bootloader
 
 This is a very simple bootloader (or specifically a chain loader) that loads a binary from the Mini UART.

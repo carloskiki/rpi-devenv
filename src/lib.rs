@@ -11,30 +11,29 @@
 
 pub mod gpio;
 pub mod uart;
+mod mmu;
 
-extern "C" {
-    pub fn mem_barrier();
-}
+use core::arch::asm;
 
-use bitflags::bitflags;
-bitflags! {
-    pub struct InterruptTable: u64 {
-        const AUXILIARY = 1 << 29;
-        const I2C_SPI_PERIPHERAL = 1 << 43;
-        const SMI = 1 << 48;
-        const GPIO_0 = 1 << 49;
-        const GPIO_1 = 1 << 50;
-        const GPIO_2 = 1 << 51;
-        const GPIO_3 = 1 << 52;
-        const I2C = 1 << 53;
-        const SPI = 1 << 54;
-        const PCM = 1 << 55;
-        const UART = 1 << 57;
-
-
-        const _ = !0;
-    }
-}
+// use bitflags::bitflags;
+// bitflags! {
+//     pub struct InterruptTable: u64 {
+//         const AUXILIARY = 1 << 29;
+//         const I2C_SPI_PERIPHERAL = 1 << 43;
+//         const SMI = 1 << 48;
+//         const GPIO_0 = 1 << 49;
+//         const GPIO_1 = 1 << 50;
+//         const GPIO_2 = 1 << 51;
+//         const GPIO_3 = 1 << 52;
+//         const I2C = 1 << 53;
+//         const SPI = 1 << 54;
+//         const PCM = 1 << 55;
+//         const UART = 1 << 57;
+// 
+// 
+//         const _ = !0;
+//     }
+// }
 
 trait Sealed {}
 
@@ -48,3 +47,24 @@ macro_rules! impl_sealed {
     };
 }
 pub(crate) use impl_sealed;
+
+/// Perform a data memory barrier operation.
+/// 
+/// All explicit memory accesses occurring in program order before this operation
+/// will be globally observed before any memory accesses occurring in program
+/// order after this operation. This includes both read and write accesses.
+/// 
+/// This differs from a "data synchronization barrier" in that a data
+/// synchronization barrier will ensure that all previous explicit memory
+/// accesses occurring in program order have fully completed before continuing
+/// and that no subsequent instructions will be executed until that point, even
+/// if they do not access memory. This is unnecessary for what we need this for.
+///
+/// See section B2.6.1 of the ARMv6 manual for more details.
+pub fn data_memory_barrier() {
+    // Safety: The operation is defined in the ARMv6 manual. See section B2.6.1 of the ARMv6 manual,
+    // and section 3.2.22 of the ARM1176JZFS manual.
+    unsafe {
+        asm!("mcr p15, 0, {}, c7, c10, 5", in(reg) 0, options(nostack));
+    }
+}

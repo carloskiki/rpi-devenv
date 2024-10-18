@@ -5,7 +5,7 @@ use core::{
 
 use crate::{
     gpio::{Alternate5, Pin},
-    impl_sealed, mem_barrier, Sealed,
+    impl_sealed, data_memory_barrier, Sealed,
 };
 
 const CLOCK_SPEED: u32 = 250_000_000;
@@ -48,7 +48,6 @@ impl MiniUart<(), ()> {
         let lock = MiniUartLock::get()?;
         // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
         // appropriately. A new `Uart` instance is not created if the peripheral is already in use.
-        // A memory barrier is used according to the BCM2835 manual section 1.3.
         //
         // Disable the Mini UART RX and TX.
         unsafe { write_volatile(AUX_MU_CNTL_REG, 0) };
@@ -71,7 +70,7 @@ impl MiniUart<(), ()> {
     /// multiple instances of the Mini UART will cause undefined behaviour._
     pub unsafe fn get_unchecked() -> Self {
         // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
-        // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
+        // appropriately.
         //
         // Disable the Mini UART RX and TX.
         unsafe { write_volatile(AUX_MU_CNTL_REG, 0) };
@@ -94,12 +93,11 @@ impl<RxPin, TxPin> MiniUart<RxPin, TxPin> {
         );
         let baud_rate_reg = (CLOCK_SPEED / (8 * baud_rate)) - 1;
         // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
-        // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
+        // appropriately.
         //
         // The input baud rate is in the range 476..=31_250_000, therefore baud_rate_reg is a valid
         // u16 value.
         unsafe {
-            mem_barrier();
             write_volatile(AUX_MU_BAUD_REG, baud_rate_reg);
         }
         self.baud_rate = baud_rate;
@@ -107,9 +105,8 @@ impl<RxPin, TxPin> MiniUart<RxPin, TxPin> {
 
     pub fn set_bit_mode(&mut self, eight_bits: bool) {
         // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
-        // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
+        // appropriately.
         unsafe {
-            mem_barrier();
             write_volatile(AUX_MU_LCR_REG, if eight_bits { 3 } else { 0 });
         }
         self.eight_bits = eight_bits;
@@ -140,7 +137,6 @@ where
         // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
         // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
         unsafe {
-            mem_barrier();
             write_volatile(AUX_MU_CNTL_REG, ((TxPin::ENABLED as u32) << 1) | 1);
             write_volatile(AUX_MU_IIR_REG, 0b10);
         }
@@ -187,9 +183,8 @@ where
     #[allow(private_interfaces)]
     pub unsafe fn enable_transmitter_no_pin(self) -> MiniUart<RxPin, UnsafeTxPin> {
         // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
-        // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
+        // appropriately.
         unsafe {
-            mem_barrier();
             write_volatile(AUX_MU_CNTL_REG, 0b10 | RxPin::ENABLED as u32);
             write_volatile(AUX_MU_IIR_REG, 0b100);
         }
@@ -232,13 +227,17 @@ where
     /// This method will not block, so as little as 0 bytes may be received, and as many as the
     /// buffer can hold. The number of bytes received is returned.
     pub fn receive(&mut self, buf: &mut [u8]) -> usize {
-        for (i, byte) in buf.iter_mut().enumerate() {
+        data_memory_barrier();
+        let mut count = 0;
+        for byte in buf.iter_mut() {
             // Safety: Only addresses defined in the BCM2835 manual are accessed.
+            //  Memory barriers are used according to the BCM2835 manual section 1.3.
             if unsafe { read_volatile(AUX_MU_LSR_REG) } & 1 == 0 {
-                return i;
+                return count;
             }
             // Safety: Only addresses defined in the BCM2835 manual are accessed.
             *byte = unsafe { read_volatile(AUX_MU_IO_REG) as u8 };
+            count += 1;
         }
         buf.len()
     }
@@ -247,8 +246,8 @@ where
     ///
     /// This method will block until `buf.len()` bytes are received.
     pub fn receive_exact(&mut self, buf: &mut [u8]) {
+        data_memory_barrier();
         // Safety: Memory barriers are used according to the BCM2835 manual section 1.3.
-        unsafe { mem_barrier() };
         for byte in buf {
             // Safety: Only addresses defined in the BCM2835 manual are accessed.
             while unsafe { read_volatile(AUX_MU_LSR_REG) } & 1 == 0 {}
@@ -261,10 +260,9 @@ where
     ///
     /// Drops the receiver pin if it was used.
     pub fn disable_receiver(self) -> MiniUart<(), TxPin> {
-        // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
-        // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
+        data_memory_barrier();
+        // Safety: Only addresses defined in the BCM2835 manual are accessed.
         unsafe {
-            mem_barrier();
             write_volatile(AUX_MU_CNTL_REG, (TxPin::ENABLED as u32) << 1);
         }
         MiniUart {
@@ -282,12 +280,11 @@ where
     RxPin: MiniUartRxPin,
     TxPin: MiniUartTxPin<Enabled = True>,
 {
-    pub fn send_blocking(&mut self, bytes: impl Iterator<Item = u8>) {
-        // Safety: A memory barrier is used according to the BCM2835 manual section 1.3.
-        unsafe { mem_barrier() };
-
+    pub fn send_blocking(&mut self, bytes: impl IntoIterator<Item = u8>) {
+        data_memory_barrier();
         for byte in bytes {
             // Safety: Only addresses defined in the BCM2835 manual are accessed.
+            //  Memory barriers are used according to the BCM2835 manual section 1.3.
             unsafe {
                 while read_volatile(AUX_MU_LSR_REG) & 0x20 == 0 {}
                 write_volatile(AUX_MU_IO_REG, byte as u32);
@@ -297,10 +294,10 @@ where
 
     pub fn send(&mut self, bytes: &mut impl Iterator<Item = u8>) -> usize {
         let mut sent = 0;
-        // Safety: Memory barriers are used according to the BCM2835 manual section 1.3.
-        unsafe { mem_barrier() };
+        data_memory_barrier();
         for byte in bytes {
             // Safety: Only addresses defined in the BCM2835 manual are accessed.
+            //  Memory barriers are used according to the BCM2835 manual section 1.3.
             unsafe {
                 if read_volatile(AUX_MU_LSR_REG) & 0x20 == 0 {
                     break;
@@ -317,9 +314,8 @@ where
     /// Drops the transmitter pin if it was used.
     pub fn disable_transmitter(self) -> MiniUart<RxPin, ()> {
         // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
-        // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
+        //  appropriately.
         unsafe {
-            mem_barrier();
             write_volatile(AUX_MU_CNTL_REG, RxPin::ENABLED as u32);
         }
         MiniUart {
@@ -337,6 +333,7 @@ struct MiniUartLock;
 
 impl MiniUartLock {
     fn get() -> Option<Self> {
+        data_memory_barrier();
         // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
         // appropriately. A new `Uart` instance is not created if the peripheral is already in use.
         // A memory barrier is used according to the BCM2835 manual section 1.3.
@@ -345,7 +342,6 @@ impl MiniUartLock {
             if enable_state & 1 != 0 {
                 return None;
             }
-            mem_barrier();
             write_volatile(AUX_ENABLES, enable_state | 1);
         }
         Some(Self)
@@ -354,11 +350,11 @@ impl MiniUartLock {
 
 impl Drop for MiniUartLock {
     fn drop(&mut self) {
+        data_memory_barrier();
         // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
         // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
         unsafe {
             let enable_state = read_volatile(AUX_ENABLES);
-            mem_barrier();
             write_volatile(AUX_ENABLES, enable_state & !1);
         }
     }

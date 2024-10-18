@@ -38,7 +38,6 @@ pub extern "C" fn first_stage() -> ! {
     }
 
     // Clean up before jumping to the kernel
-    rx_tx.send_blocking("BOOTING".bytes());
     drop(rx_tx);
 
     // Safety: We know that the kernel is a function that never returns.

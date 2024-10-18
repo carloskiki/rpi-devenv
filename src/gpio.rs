@@ -1,9 +1,9 @@
 use core::{
     ptr::{read_volatile, write_volatile},
-    sync::atomic::{AtomicU32, Ordering},
+    sync::atomic::AtomicU32,
 };
 
-use crate::{impl_sealed, mem_barrier, Sealed};
+use crate::{impl_sealed, data_memory_barrier, Sealed};
 
 const FUNCTION_SELECT_BASE: *mut u32 = 0x20200000 as *mut u32;
 
@@ -82,13 +82,13 @@ impl<const PIN: u8, T: PinType> Pin<PIN, T> {
     pub fn get() -> Option<Self> {
         GPIO_SET.lock::<PIN>();
 
-        // Safety: Memory barrier used according to the BCM2835 manual section 1.3.
-        unsafe { mem_barrier() };
         // Safety: The PIN constant is checked to be less than a valid pin in GpioSet,
         // so the offset is always in bounds.
         let address = unsafe { FUNCTION_SELECT_BASE.add(PIN as usize / 10) };
         let shift = (PIN as usize % 10) * 3;
+        data_memory_barrier();
         // Safety: The register is valid for reading and writing.
+        // Memory barrier used according to the BCM2835 manual section 1.3.
         let func_sel = unsafe { read_volatile(address) };
         // Safety: The register is valid for writing.
         unsafe {
