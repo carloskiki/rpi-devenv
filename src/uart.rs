@@ -228,8 +228,7 @@ where
     /// buffer can hold. The number of bytes received is returned.
     pub fn receive(&mut self, buf: &mut [u8]) -> usize {
         data_memory_barrier();
-        let mut count = 0;
-        for byte in buf.iter_mut() {
+        for (count, byte) in buf.iter_mut().enumerate() {
             // Safety: Only addresses defined in the BCM2835 manual are accessed.
             //  Memory barriers are used according to the BCM2835 manual section 1.3.
             if unsafe { read_volatile(AUX_MU_LSR_REG) } & 1 == 0 {
@@ -237,7 +236,6 @@ where
             }
             // Safety: Only addresses defined in the BCM2835 manual are accessed.
             *byte = unsafe { read_volatile(AUX_MU_IO_REG) as u8 };
-            count += 1;
         }
         buf.len()
     }

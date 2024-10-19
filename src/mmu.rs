@@ -1,13 +1,64 @@
-union PageTableEntry {
-    section: SectionDescriptor,
-}
+// Warning: Can't modify page table after enabling MMU. That is because it is currently stored in
+// inner write-back cache, which is not supported by ARMv6. To fix this, we need to put the page
+// table in a non-inner-write-back cache memory region.
+//
+// Currently, we do not lock page tables entries in TLB, but apparently we could do that with 8
+// entries (got this information from the TLB Type register cp15 register 0).
+
+// What is required for the minimal MMU:
+// - Set the domain 0 to a mode (used for supersections, which the MMIO region is).
+// - Set the translation table base address, along with correct flags.
+// - Set the translation table `N` value equal to 0.
+// - Disable the instruction cache.
+// - Enable the MMU.
+pub static TRANSLATION_TABLE: TranslationTable = {
+    let mut table = [SectionDescriptor::disabled(); 4096];
+    const MMIO_START: usize = 512; // In MB, starts at 0x20000000
+    const MMIO_LEN: usize = 16; // In MB, ends at 0x20FFFFFF
+    let mut index = 0;
+    while index < MMIO_START {
+        table[index] = SectionDescriptor::new(
+            SectionBaseAddress::Section(index as u16),
+            AccessPermissions::ReadWrite,
+            MemoryAttributes {
+                execute: true,
+                global: true,
+                memory_type: MemoryType::Normal {
+                    inner: CachePolicy::WriteBack,
+                    outer: CachePolicy::WriteBack,
+                    shareable: true,
+                },
+            },
+        );
+        index += 1;
+    }
+
+    // Map the MMIO region as device memory.
+    while index < MMIO_START + MMIO_LEN {
+        table[index] = SectionDescriptor::new(
+            SectionBaseAddress::Section(index as u16),
+            AccessPermissions::ReadWrite,
+            MemoryAttributes {
+                execute: false,
+                global: true,
+                memory_type: MemoryType::Device { shareable: true },
+            },
+        );
+        index += 1;
+    }
+
+    TranslationTable(table)
+};
+
+#[repr(C, align(16384))]
+pub struct TranslationTable(pub [SectionDescriptor; 4096]);
 
 #[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct SectionDescriptor(u32);
 
 impl SectionDescriptor {
-    const fn new(
+    pub const fn new(
         base_address: SectionBaseAddress,
         access_permissions: AccessPermissions,
         MemoryAttributes {
@@ -18,7 +69,7 @@ impl SectionDescriptor {
     ) -> Self {
         let mut address = match base_address {
             SectionBaseAddress::Section(addr) => (addr as u32) << 20,
-            SectionBaseAddress::SuperSection(addr) => ((addr as u32) << 24) & (1 << 18),
+            SectionBaseAddress::SuperSection(addr) => ((addr as u32) << 24) | (1 << 18),
         };
         address |= ((!global) as u32) << 17;
         let shareable = match memory_type {
@@ -66,10 +117,15 @@ impl SectionDescriptor {
         address |= 0b10;
         SectionDescriptor(address)
     }
+
+    const fn disabled() -> Self {
+        // See ARMv6 Architecture Reference Manual, section B4.7.4.
+        SectionDescriptor(0)
+    }
 }
 
 /// The base address of a memory region.
-enum SectionBaseAddress {
+pub enum SectionBaseAddress {
     /// The section's base address.
     ///
     /// It should reside in the first 12 bits of the address.
@@ -80,7 +136,7 @@ enum SectionBaseAddress {
 }
 
 /// Access permissions for a memory region.
-enum AccessPermissions {
+pub enum AccessPermissions {
     /// No access is allowed.
     NoAccess,
     /// Read only access is allowed in priviledged mode, no access in user mode.
@@ -95,19 +151,19 @@ enum AccessPermissions {
     ReadWrite,
 }
 
-struct MemoryAttributes {
+pub struct MemoryAttributes {
     /// Whether memory accesses can be an instruction fetch.
-    execute: bool,
+    pub execute: bool,
     /// Whether the memory is globally accessible.
-    global: bool,
+    pub global: bool,
     /// The memory type.
-    memory_type: MemoryType,
+    pub memory_type: MemoryType,
 }
 
 /// The type of memory.
 ///
 /// Used in the `MemoryAttributes` struct to describe the type of memory.
-enum MemoryType {
+pub enum MemoryType {
     /// Normal memory.
     Normal {
         /// Inner cache policy.
@@ -127,7 +183,7 @@ enum MemoryType {
 }
 
 /// The cache policy for a memory region.
-enum CachePolicy {
+pub enum CachePolicy {
     /// No caching is allowed.
     NonCacheable,
     /// Write through caching, no write allocate.
