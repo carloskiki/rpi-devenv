@@ -33,11 +33,10 @@ Steps to follow:
 
 ## Notes
 - I need the MMU in order to use CAS (Compare and Swap) instructions.
-
 - When running with QEMU, the AUX_ENABLES register is already enabled, so when we try to acquire the lock
     we fail and panic, which is why we couldn't see the uart output to stdio before. Interesting.
-
 - The theoretical maximal address for the chip is 0x20000000 (512MB)
+- QEMU does not support supersections (16MB sections) in the translation table, so we need to use 1MB sections.
 
 ## The Bootloader
 
