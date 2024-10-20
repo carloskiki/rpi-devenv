@@ -19,6 +19,42 @@
 - [Linux Insides](https://0xax.gitbooks.io/linux-insides/content/index.html) A great book about the Linux kernel
     and how it works.
 
+## Memory Map of our Environment
+Questions:
+- Where do we put the stack?
+- Do we need different stacks for all interrupt modes?
+- Where do we put the heap?
+- Where do we put the kernel?
+- Where do we put the interrupt vector?
+
+Claims:
+- We want to be able to allocate some VC4 Memory.
+- We want the stack to be resizeable.
+- We want the heap to be "what's left over".
+
+How do we set up the MMU?
+- We want the stack to be protected (exception on overflow).
+- So, what granularity do we want to offer? (1MiB is sensible). So "per section".
+- We are loaded at some address, how do we compact memory as much as possible.
+
+- What range of memory do we allow to be given to VC4?
+
+### The Map
+
+| 0x0000 Interupt Vectors |
+| ... Nothing             |
+| 0x8000 "boot" code      |
+| ... data                |
+| ... bss                 |
+| ... Heap start          |
+|   vvv Heap grows vvv    |
+| ....................... |
+| 0xXXX00000 Stack end    | (0x19900000 by default)
+|   ^^^ Stack grows ^^^   |
+| 0x20000000 Stack end    |
+
+
+
 ## TODOs
 - [x] Have a chain loader.
 - [x] Have a working MMU.
@@ -26,6 +62,7 @@
 - [ ] Move the stack pointer and have a good memory layout.
 - [ ] Setup interrupt handling.
 - [ ] Have Async GPIO handling.
+- [ ] Make it so that we don't need to fuckin change between `get` and `get_unchecked` for QEMU or the pi.
 
 Steps to follow:
 - Have a working chain loader.

@@ -2,7 +2,6 @@
 #![no_main]
 
 use core::arch::asm;
-use core::iter;
 use core::sync::atomic::{AtomicBool, Ordering};
 use core::{arch::global_asm, hint::black_box};
 
@@ -16,7 +15,6 @@ const GPFSEL4: usize = 0x20200010;
 const GPSET1: usize = 0x20200020;
 const GPCLR1: usize = 0x2020002C;
 
-const TIMER_FOUR_SEC: u32 = 0x400000;
 
 const BOOT_ADDRESS: usize = 0x8000;
 
@@ -24,7 +22,7 @@ global_asm!(include_str!("boot.s"), options(raw));
 
 #[no_mangle]
 pub extern "C" fn first_stage() -> ! {
-    let mut uart = unsafe { MiniUart::get_unchecked() };
+    let mut uart = MiniUart::get().unwrap();
     uart.set_bit_mode(true);
     uart.set_baud_rate(115200);
     let tx_pin: Pin<14, Alternate5> = Pin::get().unwrap();
@@ -96,17 +94,19 @@ unsafe fn put32(adder: usize, value: u32) {
     core::ptr::write_volatile(adder as *mut u32, value);
 }
 
-fn delay(mut n: u32) {
-    while n > 0 {
-        n -= 1;
-        black_box(n);
-    }
-}
-
+#[no_mangle]
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
-    data_memory_barrier();
+    const BLINK_DELAY: u32 = 0x400000;
+    fn delay(mut n: u32) {
+        while n > 0 {
+            n -= 1;
+            black_box(n);
+        }
+    }
 
+    data_memory_barrier();
+    
     // Set GPIO pin 47 as output
     unsafe {
         get32(GPFSEL4);
@@ -120,12 +120,12 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
         unsafe {
             put32(GPSET1, 1 << 15);
         }
-        delay(TIMER_FOUR_SEC);
+        delay(BLINK_DELAY);
 
         // Turn on the LED
         unsafe {
             put32(GPCLR1, 1 << 15);
         }
-        delay(TIMER_FOUR_SEC);
+        delay(BLINK_DELAY);
     }
 }
