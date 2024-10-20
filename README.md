@@ -20,10 +20,12 @@
     and how it works.
 
 ## TODOs
-- [ ] Have a chain loader.
+- [x] Have a chain loader.
+- [x] Have a working MMU.
+- [x] Understand JTAG - to implement it (implemented by default).
+- [ ] Move the stack pointer and have a good memory layout.
 - [ ] Setup interrupt handling.
 - [ ] Have Async GPIO handling.
-- [ ] Understand JTAG - to implement it.
 
 Steps to follow:
 - Have a working chain loader.
