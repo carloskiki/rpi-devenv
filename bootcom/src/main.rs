@@ -1,5 +1,5 @@
 use std::{
-    io::{copy, stdout},
+    io::{copy, stdout, Write},
     time::Duration,
 };
 
@@ -44,4 +44,10 @@ fn main() {
     port.write_all(&binary)
         .expect("should be able to write to the serial port");
     println!("=> The binary has been sent.");
+
+    port.set_timeout(Duration::from_secs(5))
+        .expect("should be able to set the timeout");
+    let _ = copy(&mut port, &mut stdout());
+    stdout().flush().expect("should be able to flush stdout");
+    println!("=> The device has finished executing.");
 }
