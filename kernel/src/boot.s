@@ -21,30 +21,22 @@ unused_handler:     .word hang
 irq_handler:        .word hang
 fiq_handler:        .word hang
 
+// Let's not use r0, r1, r2, for now, I think they hold useful values such as atags, and other stuff.
 reset:
     // Setup the interrupt vector table.
-    mov r0,#0x8000
-    mov r1,#0x0000
-    ldmia r0!,{r2,r3,r4,r5,r6,r7,r8,r9}
-    stmia r1!,{r2,r3,r4,r5,r6,r7,r8,r9}
-    ldmia r0!,{r2,r3,r4,r5,r6,r7,r8,r9}
-    stmia r1!,{r2,r3,r4,r5,r6,r7,r8,r9}
+    mov r3,#0x8000
+    mov r4,#0x0000
+    ldmia r3!,{r5,r6,r7,r8,r9,r10,r11,r12}
+    stmia r4!,{r5,r6,r7,r8,r9,r10,r11,r12}
+    ldmia r3!,{r5,r6,r7,r8,r9,r10,r11,r12}
+    stmia r4!,{r5,r6,r7,r8,r9,r10,r11,r12}
 
-    // Setup the IRQ stack ptr.
-    // TODO: This collides with the SVC stack ptr. We should fix this.
-    mov r0, #0xD2 // (SPR_MODE_IRQ | SPR_IRQ_DISABLE | SPR_FIQ_DISABLE)
-    msr CPSR_c, r0
+    // Setup stack pointer for SVC mode.
     mov sp, #0x8000
 
-    // Setup the FIQ stack ptr.
-    mov r0, #0xD1 // (SPR_MODE_FIQ | SPR_IRQ_DISABLE | SPR_FIQ_DISABLE)
-    msr CPSR_c, r0
+    // Setup stack pointer for ABT mode.
+    cps #0b10111 // change to abt mode
     mov sp, #0x4000
-
-    // Setup the SVC stack ptr.
-    mov r0, #0xD3 // (SPR_MODE_SVC | SPR_IRQ_DISABLE | SPR_FIQ_DISABLE)
-    msr CPSR_c, r0
-    mov sp, #0x8000
 
     // Zero out the BSS section.
 zero_bss:
@@ -55,8 +47,6 @@ zero_bss:
 1:
     str r5, [r3], #4
     cmp r3, r4
-    // This break is pc-relative, so it does not use the relocated address.
-    // See: https://sourceware.org/binutils/docs/as/Symbol-Names.html.
     blo 1b
     
     // Call into Rust.

@@ -61,10 +61,10 @@ How do we set up the MMU?
 - [x] Understand JTAG - to implement it (implemented by default).
 - [x] Map Undef, Data Abt, and Prefecth Abt to the panic handler.
 
-- [ ] Make it so that we don't need to fuckin change between `get` and `get_unchecked` for QEMU or the pi.
+- [x] Make it so that we don't need to fuckin change between `get` and `get_unchecked` for QEMU or the pi.
     Either: Use the lock but don't check with get_unchecked, or have a peripheral `init` that deactivates the miniuart
     when QEMU is used. We could also have a config flag that checks if the bin is compiled for QEMU.
-- [ ] Make a stack for ABORT mode and a stack for SVC.
+- [x] Make a stack for ABORT mode and a stack for SVC.
 - [ ] Map the SYSTEM stack to a protected place in memory.
 - [ ] Make Undef use the ABORT cpu mode
 - [ ] Make IRQ use SVC mode
@@ -75,6 +75,12 @@ How do we set up the MMU?
 - [ ] Have Async GPIO handling.
 
 - [ ] Have a test framework
+
+## Future Things
+- [ ] Have a processor abort hook that has specific structs as input (instead of "str" for panic).
+- [ ] Enable FIQ
+- [ ] Make sure all caches are enabled
+- [ ] Have some TLB locks (maybe?)
 
 ## Notes
 - I need the MMU in order to use CAS (Compare and Swap) instructions.

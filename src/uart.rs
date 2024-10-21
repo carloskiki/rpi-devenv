@@ -46,19 +46,7 @@ pub struct MiniUart<RxPin, TxPin> {
 impl MiniUart<(), ()> {
     pub fn get() -> Option<MiniUart<(), ()>> {
         let lock = MiniUartLock::get()?;
-        // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
-        // appropriately. A new `Uart` instance is not created if the peripheral is already in use.
-        //
-        // Disable the Mini UART RX and TX.
-        unsafe { write_volatile(AUX_MU_CNTL_REG, 0) };
-
-        Some(Self {
-            baud_rate: 0,
-            eight_bits: false,
-            lock,
-            transmitter_pin: (),
-            receiver_pin: (),
-        })
+        Some(Self::get_with_lock(lock))
     }
 
     /// Get the Mini UART without acquiring its lock.
@@ -66,11 +54,17 @@ impl MiniUart<(), ()> {
     /// # Safety
     ///
     /// This is unsafe as you must make sure that this is the only instance of the Mini UART.
-    /// Otherwise, the Mini UART will be in an inconsistent state. _Even if unused, having
-    /// multiple instances of the Mini UART will cause undefined behaviour._
+    /// Otherwise, the Mini UART will be in an inconsistent state.
     pub unsafe fn get_unchecked() -> Self {
+        // Safety: We are in an unsafe function that requires the caller to ensure the conditions
+        // for this function.
+        let lock = unsafe { MiniUartLock::get_unchecked() };
+        Self::get_with_lock(lock)
+    }
+
+    fn get_with_lock(lock: MiniUartLock) -> Self {
         // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
-        // appropriately.
+        // appropriately. A new `Uart` instance is not created if the peripheral is already in use.
         //
         // Disable the Mini UART RX and TX.
         unsafe { write_volatile(AUX_MU_CNTL_REG, 0) };
@@ -78,7 +72,7 @@ impl MiniUart<(), ()> {
         Self {
             baud_rate: 0,
             eight_bits: false,
-            lock: MiniUartLock,
+            lock,
             transmitter_pin: (),
             receiver_pin: (),
         }
@@ -343,6 +337,16 @@ impl MiniUartLock {
             write_volatile(AUX_ENABLES, enable_state | 1);
         }
         Some(Self)
+    }
+
+    /// Get the Mini UART lock without checking if it is already in use.
+    ///
+    /// # Safety
+    ///
+    /// This is unsafe as you must make sure that this is the only instance of the Mini UART.
+    unsafe fn get_unchecked() -> Self {
+        let _ = Self::get();
+        Self
     }
 }
 
