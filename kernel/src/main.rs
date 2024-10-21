@@ -2,6 +2,7 @@
 #![no_main]
 
 use core::arch::asm;
+use core::ptr::read_volatile;
 use core::sync::atomic::{AtomicBool, Ordering};
 use core::{arch::global_asm, hint::black_box};
 
@@ -20,25 +21,15 @@ const BOOT_ADDRESS: usize = 0x8000;
 
 global_asm!(include_str!("boot.s"), options(raw));
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn first_stage() -> ! {
-    let mut uart = MiniUart::get().unwrap();
-    uart.set_bit_mode(true);
-    uart.set_baud_rate(115200);
-    let tx_pin: Pin<14, Alternate5> = Pin::get().unwrap();
-    let rx_pin: Pin<15, Alternate5> = Pin::get().unwrap();
-    let mut rx_tx = uart.enable_transmitter(tx_pin).enable_receiver(rx_pin);
-    rx_tx.send_blocking("hello world\n".bytes());
-
-    let _test = SectionDescriptor::new(
-            SectionBaseAddress::SuperSection(1 << 5),
-            AccessPermissions::ReadWrite,
-            MemoryAttributes {
-                execute: false,
-                global: true,
-                memory_type: MemoryType::Device { shareable: false },
-            },
-    );
+    // let mut uart = MiniUart::get().unwrap();
+    // uart.set_bit_mode(true);
+    // uart.set_baud_rate(115200);
+    // let tx_pin: Pin<14, Alternate5> = Pin::get().unwrap();
+    // let rx_pin: Pin<15, Alternate5> = Pin::get().unwrap();
+    // let mut rx_tx = uart.enable_transmitter(tx_pin).enable_receiver(rx_pin);
+    // rx_tx.send_blocking("hello world\n".bytes());
 
     unsafe {
         let addr = (TRANSLATION_TABLE.0.as_ptr() as usize) & (!0 << 14) | 0b11011;
@@ -67,11 +58,6 @@ pub extern "C" fn first_stage() -> ! {
     }
     data_synchronization_barrier();
 
-    rx_tx.send_blocking("MMU enabled\n".bytes());
-    let atomic_test = AtomicBool::new(false);
-    atomic_test.fetch_or(true, Ordering::Acquire);
-    rx_tx.send_blocking("Atomic test passed\n".bytes());
-
     loop {}
 }
 
@@ -94,7 +80,6 @@ unsafe fn put32(adder: usize, value: u32) {
     core::ptr::write_volatile(adder as *mut u32, value);
 }
 
-#[no_mangle]
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     const BLINK_DELAY: u32 = 0x400000;

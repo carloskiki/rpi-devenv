@@ -59,16 +59,18 @@ How do we set up the MMU?
 - [x] Have a chain loader.
 - [x] Have a working MMU.
 - [x] Understand JTAG - to implement it (implemented by default).
-- [ ] Move the stack pointer and have a good memory layout.
+- [x] Map Undef, Data Abt, and Prefecth Abt to the panic handler.
+
+- [ ] Make it so that we don't need to fuckin change between `get` and `get_unchecked` for QEMU or the pi.
+- [ ] Make a stack for ABORT mode and a stack for SVC.
+- [ ] Map the SYSTEM stack to a protected place in memory.
+- [ ] Make Undef use the ABORT cpu mode
+- [ ] Make IRQ use SVC mode
+- [ ] Check if the memory stops at 512MiB on the hardware (works in QEMU). 
+- [ ] Test to make sure that svc stack pointer always gets reset after interrupt handling.
+
 - [ ] Setup interrupt handling.
 - [ ] Have Async GPIO handling.
-- [ ] Make it so that we don't need to fuckin change between `get` and `get_unchecked` for QEMU or the pi.
-
-Steps to follow:
-- Have a working chain loader.
-- Have a working JTAG debugger.
-- Enable memory maps
-- Enable CAS Atomic in the GPIO interface.
 
 ## Notes
 - I need the MMU in order to use CAS (Compare and Swap) instructions.

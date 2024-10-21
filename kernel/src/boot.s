@@ -1,7 +1,9 @@
 .section ".text.boot"
 
 .globl _start
+
 _start:
+    // Trick from dwelch67: https://github.com/dwelch67/raspberrypi-zero/tree/master/blinker05
     ldr pc, reset_handler
     ldr pc, undefined_handler
     ldr pc, swi_handler
@@ -11,12 +13,12 @@ _start:
     ldr pc, irq_handler
     ldr pc, fiq_handler
 reset_handler:      .word reset
-undefined_handler:  .word hang2
+undefined_handler:  .word interrupt_panic
 swi_handler:        .word hang
-prefetch_handler:   .word hang3
-data_handler:       .word data_abort
+prefetch_handler:   .word interrupt_panic
+data_handler:       .word interrupt_panic
 unused_handler:     .word hang
-irq_handler:        .word hang4
+irq_handler:        .word hang
 fiq_handler:        .word hang
 
 reset:
@@ -61,21 +63,4 @@ zero_bss:
     b first_stage
 
 hang:
-    b hang
-
-hang1:
-    b hang1
-
-hang2:
-    b hang2
-
-hang3:
-    b hang3
-
-hang4:
-    b hang4
-
-data_abort:
-    mrc p15, 0, r0, c5, c0, 0
-    mrc p15, 0, r1, c6, c0, 0
     b hang
