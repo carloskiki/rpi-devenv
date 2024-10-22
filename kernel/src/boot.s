@@ -13,10 +13,10 @@ _start:
     ldr pc, irq_handler
     ldr pc, fiq_handler
 reset_handler:      .word reset
-undefined_handler:  .word interrupt_panic
+undefined_handler:  .word abort_with_panic
 swi_handler:        .word isr
-prefetch_handler:   .word interrupt_panic
-data_handler:       .word interrupt_panic
+prefetch_handler:   .word abort_with_panic
+data_handler:       .word abort_with_panic
 unused_handler:     .word hang
 irq_handler:        .word isr
 fiq_handler:        .word hang
@@ -54,6 +54,11 @@ zero_bss:
 
 hang:
     b hang
+
+abort_with_panic:
+    cpsid aif, #{ABORT_MODE}
+    // TODO: Store some register values to have better debugging information.
+    b interrupt_panic
 
 svc_switch:
     // Enter the instruction in SVC mode.

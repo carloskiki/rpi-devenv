@@ -122,6 +122,12 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 
 // IMPORTANT: You only have 16KiB of stack space. Do not use more than that.
 #[unsafe(no_mangle)]
-pub extern "C" fn interrupt_handler() -> ! {
-    loop {}
+pub unsafe extern "C" fn interrupt_handler() {
+    // TODO: ...
+}
+
+/// The interrupt handler for Data Abort, Prefecth Abort, and Undefined Instructions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn interrupt_panic() -> ! {
+    panic!()
 }

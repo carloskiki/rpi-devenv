@@ -66,8 +66,8 @@ How do we set up the MMU?
     when QEMU is used. We could also have a config flag that checks if the bin is compiled for QEMU.
 - [x] Make a stack for ABORT mode and a stack for SVC.
 - [ ] Map the SYSTEM stack to a protected place in memory.
-- [ ] Make Undef use the ABORT cpu mode
-- [ ] Make IRQ use SVC mode
+- [x] Make Undef use the ABORT cpu mode
+- [x] Make IRQ use SVC mode
 - [ ] Check if the memory stops at 512MiB on the hardware (works in QEMU). 
 - [ ] Test to make sure that svc stack pointer always gets reset after interrupt handling.
 

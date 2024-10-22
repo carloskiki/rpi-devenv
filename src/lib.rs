@@ -76,9 +76,3 @@ pub fn data_synchronization_barrier() {
         asm!("mcr p15, 0, {}, c7, c10, 4", in(reg) 0, options(nostack, nomem, preserves_flags));
     }
 }
-
-/// The interrupt handler for Data Abort, Prefecth Abort, and Undefined Instructions.
-#[unsafe(no_mangle)]
-pub fn interrupt_panic() {
-    panic!()
-}
