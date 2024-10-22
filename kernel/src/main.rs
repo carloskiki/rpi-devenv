@@ -119,3 +119,9 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
         delay(BLINK_DELAY);
     }
 }
+
+// IMPORTANT: You only have 16KiB of stack space. Do not use more than that.
+#[unsafe(no_mangle)]
+pub extern "C" fn interrupt_handler() -> ! {
+    loop {}
+}
