@@ -1,10 +1,10 @@
-__binary_start = 0x8000;
+__physical_load_address = 0x8000;
 
-ENTRY(__binary_start)
+ENTRY(__physical_load_address)
 SECTIONS
 {
-    /* Starts at LOADER_ADDR. */
-    . = __binary_start;
+    /* Starts at load address. */
+    . = __physical_load_address;
     .text :
     {
         KEEP(*(.text.boot))

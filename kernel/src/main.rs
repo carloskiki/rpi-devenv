@@ -7,7 +7,10 @@ use core::sync::atomic::{AtomicBool, Ordering};
 use core::{arch::global_asm, hint::black_box};
 
 use rpi::gpio::{Alternate5, Pin};
-use rpi::mmu::{AccessPermissions, MemoryAttributes, MemoryType, SectionBaseAddress, SectionDescriptor, TRANSLATION_TABLE};
+use rpi::mmu::{
+    AccessPermissions, MemoryAttributes, MemoryType, SectionBaseAddress, SectionDescriptor,
+    TRANSLATION_TABLE,
+};
 use rpi::uart::MiniUart;
 use rpi::{data_memory_barrier, data_synchronization_barrier};
 
@@ -16,10 +19,12 @@ const GPFSEL4: usize = 0x20200010;
 const GPSET1: usize = 0x20200020;
 const GPCLR1: usize = 0x2020002C;
 
-
 const BOOT_ADDRESS: usize = 0x8000;
 
-global_asm!(include_str!("boot.s"), options(raw));
+global_asm!(include_str!("boot.s"),
+    ABORT_MODE = const ProcessorMode::Abort as u32,
+    SVC_MODE = const ProcessorMode::Supervisor as u32
+);
 
 #[unsafe(no_mangle)]
 pub extern "C" fn first_stage() -> ! {
@@ -91,7 +96,7 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
     }
 
     data_memory_barrier();
-    
+
     // Set GPIO pin 47 as output
     unsafe {
         get32(GPFSEL4);

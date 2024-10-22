@@ -14,29 +14,29 @@ _start:
     ldr pc, fiq_handler
 reset_handler:      .word reset
 undefined_handler:  .word interrupt_panic
-swi_handler:        .word hang
+swi_handler:        .word isr
 prefetch_handler:   .word interrupt_panic
 data_handler:       .word interrupt_panic
 unused_handler:     .word hang
-irq_handler:        .word hang
+irq_handler:        .word isr
 fiq_handler:        .word hang
 
 // Let's not use r0, r1, r2, for now, I think they hold useful values such as atags, and other stuff.
 reset:
     // Setup the interrupt vector table.
-    mov r3,#0x8000
-    mov r4,#0x0000
-    ldmia r3!,{r5,r6,r7,r8,r9,r10,r11,r12}
-    stmia r4!,{r5,r6,r7,r8,r9,r10,r11,r12}
-    ldmia r3!,{r5,r6,r7,r8,r9,r10,r11,r12}
-    stmia r4!,{r5,r6,r7,r8,r9,r10,r11,r12}
+    ldr r3, =__physical_load_address
+    mov r4, #0 // At address 0x00000000
+    ldmia r3!,{{r5,r6,r7,r8,r9,r10,r11,r12}}
+    stmia r4!,{{r5,r6,r7,r8,r9,r10,r11,r12}}
+    ldmia r3!,{{r5,r6,r7,r8,r9,r10,r11,r12}}
+    stmia r4!,{{r5,r6,r7,r8,r9,r10,r11,r12}}
 
     // Setup stack pointer for SVC mode.
-    mov sp, #0x8000
+    ldr sp, =__physical_load_address
 
     // Setup stack pointer for ABT mode.
-    cps #0b10111 // change to abt mode
-    mov sp, #0x4000
+    cps #{ABORT_MODE} // change to abt mode
+    mov sp, #0x4000 // TODO: This should not be a magic number.
 
     // Zero out the BSS section.
 zero_bss:
@@ -54,3 +54,15 @@ zero_bss:
 
 hang:
     b hang
+
+svc_switch:
+    // Enter the instruction in SVC mode.
+    srsfd #{SVC_MODE}!
+    cpsie aif, #{SVC_MODE}
+    // Put all registers on the stack.
+    stmfd sp!, {{r0-r12}}
+    // ... handle the interrupt ...
+    bl interrupt_handler
+    // Restore all registers.
+    ldmfd sp!, {{r0-r12}}
+    rfefd sp!

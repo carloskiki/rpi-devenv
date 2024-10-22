@@ -77,10 +77,11 @@ How do we set up the MMU?
 - [ ] Have a test framework
 
 ## Future Things
-- [ ] Have a processor abort hook that has specific structs as input (instead of "str" for panic).
 - [ ] Enable FIQ
+- [ ] Have Vectored IRQs and FIQs
 - [ ] Make sure all caches are enabled
 - [ ] Have some TLB locks (maybe?)
+- [ ] Have a processor abort hook that has specific structs as input (instead of "str" for panic).
 
 ## Notes
 - I need the MMU in order to use CAS (Compare and Swap) instructions.
