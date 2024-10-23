@@ -1,7 +1,7 @@
 [build]
 target = "../armv6a-none-eabihf.json"
 
-[target.arm-none-eabihf]
+[target.armv6a-none-eabihf]
 rustflags = ["-C", "link-arg=-Tkernel/link.x"]
 
 [unstable]

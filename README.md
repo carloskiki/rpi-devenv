@@ -68,7 +68,6 @@ How do we set up the MMU?
 - [ ] Map the SYSTEM stack to a protected place in memory.
 - [x] Make Undef use the ABORT cpu mode
 - [x] Make IRQ use SVC mode
-- [ ] Check if the memory stops at 512MiB on the hardware (works in QEMU). 
 - [ ] Test to make sure that SVC stack pointer always gets reset after interrupt handling.
     Why would it not? We pop everything from the stack in asm, and rust functions must not just indefinitely increase stack size.
 
@@ -91,6 +90,9 @@ How do we set up the MMU?
     we fail and panic, which is why we couldn't see the uart output to stdio before. Interesting.
 - The theoretical maximal address for the chip is 0x20000000 (512MB)
 - QEMU does not support supersections (16MB sections) in the translation table, so we need to use 1MB sections.
+
+- In the actual hardware, the memory is not capped at 0x20000000, does not look mirrored either so I don't know what
+    is going on there.
 
 ## The Bootloader
 

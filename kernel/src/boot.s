@@ -30,13 +30,14 @@ reset:
     stmia r4!,{{r5,r6,r7,r8,r9,r10,r11,r12}}
     ldmia r3!,{{r5,r6,r7,r8,r9,r10,r11,r12}}
     stmia r4!,{{r5,r6,r7,r8,r9,r10,r11,r12}}
-
-    // Setup stack pointer for SVC mode.
-    ldr sp, =__physical_load_address
-
+    
     // Setup stack pointer for ABT mode.
     cps #{ABORT_MODE} // change to abt mode
     mov sp, #0x4000 // TODO: This should not be a magic number.
+    
+    // Setup stack pointer for SVC mode.
+    cps #{SVC_MODE} // change to svc mode
+    ldr sp, =__physical_load_address
 
     // Zero out the BSS section.
 zero_bss:
@@ -60,7 +61,7 @@ abort_with_panic:
     // TODO: Store some register values to have better debugging information.
     b interrupt_panic
 
-svc_switch:
+isr:
     // Enter the instruction in SVC mode.
     srsfd #{SVC_MODE}!
     cpsie aif, #{SVC_MODE}

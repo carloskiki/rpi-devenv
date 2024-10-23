@@ -1,6 +1,5 @@
 use core::{
-    convert::Infallible,
-    ptr::{read_volatile, write_volatile},
+    convert::Infallible, hint::black_box, ptr::{read_volatile, write_volatile}
 };
 
 use crate::{
@@ -345,7 +344,14 @@ impl MiniUartLock {
     ///
     /// This is unsafe as you must make sure that this is the only instance of the Mini UART.
     unsafe fn get_unchecked() -> Self {
-        let _ = Self::get();
+        data_memory_barrier();
+        // Safety: Only addresses defined in the BCM2835 manual are accessed, and bits are set
+        // appropriately. A memory barrier is used according to the BCM2835 manual section 1.3.
+        unsafe {
+            let enable_state = read_volatile(AUX_ENABLES);
+            write_volatile(AUX_ENABLES, enable_state | 1);
+        }
+
         Self
     }
 }

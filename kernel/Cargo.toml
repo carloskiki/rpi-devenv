@@ -5,3 +5,8 @@ edition = "2021"
 
 [dependencies]
 rpi = { workspace = true }
+
+[[bin]]
+name = "kernel"
+test = false
+bench = false

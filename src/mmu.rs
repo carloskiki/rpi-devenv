@@ -1,3 +1,7 @@
+use core::arch::asm;
+
+use crate::data_synchronization_barrier;
+
 // Warning: Can't modify page table after enabling MMU. That is because it is currently stored in
 // inner write-back cache, which is not supported by ARMv6. To fix this, we need to put the page
 // table in a non-inner-write-back cache memory region.
@@ -37,6 +41,7 @@ pub static TRANSLATION_TABLE: TranslationTable = {
     }
 
     // Map the MMIO region as device memory.
+    index = MMIO_START;
     while index < MMIO_START + MMIO_LEN {
         table[index] = SectionDescriptor::new(
             SectionBaseAddress::Section(index as u16),
@@ -215,4 +220,40 @@ pub enum CachePolicy {
     WriteBack,
     /// write back caching, write allocate.
     WriteAllocate,
+}
+
+pub fn enable_mmu() {
+    // Safety: Everything is documented in the ARMv6 Architecture Reference Manual.
+    unsafe {
+        // Flags mean: Transaltion table is stored in shareable, inner and outer write-back
+        // cachable memory.
+        // See section B4.9.3
+        let addr = (TRANSLATION_TABLE.0.as_ptr() as usize) & (!0 << 14) | 0b11011;
+        // Set the translation table base address with its flags
+        // See section B4.9.3
+        asm!("mcr p15, 0, {}, c2, c0, 0", in(reg) addr, options(nostack, nomem, preserves_flags));
+        // Set the value of `N` to 0 in the translation table base control register
+        // See section B4.9.3
+        asm!("mcr p15, 0, {}, c2, c0, 2", in(reg) 0, options(nostack, nomem, preserves_flags));
+        // Set all domains to manager mode
+        // TODO: figure out how domain work
+        // See section B4.9.4
+        asm!("mcr p15, 0, {}, c3, c0, 0", in(reg) !0, options(nostack, nomem, preserves_flags));
+
+        // Invalidate caches and TLB
+        // See section B6.6.5
+        asm!("mcr p15, 0, {0}, c7, c7, 0
+              mcr p15, 0, {0}, c8, c7, 0", in(reg) 0, options(nostack, nomem, preserves_flags));
+        // bit 12: enable L1 instruction cache
+        // bit 11: enable branch prediction
+        // bit 2: enable L1 data cache
+        // bit 0: enable MMU
+        // See section B3.4.1
+        let mut control_reg: u32;
+        asm!("mrc p15, 0, {}, c1, c0, 0", out(reg) control_reg, options(nostack, nomem, preserves_flags));
+        control_reg |= 0b101;
+        control_reg |= 0b11 << 11;
+        asm!("mcr p15, 0, {}, c1, c0, 0", in(reg) control_reg, options(nostack, nomem, preserves_flags));
+    }
+    data_synchronization_barrier();
 }
