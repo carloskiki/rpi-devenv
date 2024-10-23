@@ -69,7 +69,8 @@ How do we set up the MMU?
 - [x] Make Undef use the ABORT cpu mode
 - [x] Make IRQ use SVC mode
 - [ ] Check if the memory stops at 512MiB on the hardware (works in QEMU). 
-- [ ] Test to make sure that svc stack pointer always gets reset after interrupt handling.
+- [ ] Test to make sure that SVC stack pointer always gets reset after interrupt handling.
+    Why would it not? We pop everything from the stack in asm, and rust functions must not just indefinitely increase stack size.
 
 - [ ] Setup interrupt handling.
 - [ ] Have Async GPIO handling.
@@ -79,6 +80,7 @@ How do we set up the MMU?
 ## Future Things
 - [ ] Enable FIQ
 - [ ] Have Vectored IRQs and FIQs
+- [ ] Have a variable stack size
 - [ ] Make sure all caches are enabled
 - [ ] Have some TLB locks (maybe?)
 - [ ] Have a processor abort hook that has specific structs as input (instead of "str" for panic).
@@ -97,8 +99,8 @@ This is a very simple bootloader (or specifically a chain loader) that loads a b
 ### Protocol
 
 The bootloader will send a `0xff` byte to signal it is ready to receive the binary. The following four bytes
-must be the size of the binary (in bytes) in little endian format. Upon receiving the binary, the bootloader
-will output a success message to the UART, clean itself up, and jump to the binary.
+must be the size of the binary (in bytes) in little endian format. Then, the binary should be sent.
+Upon receiving the binary, the bootloader will clean itself up, and jump to the binary.
 
 ### Bootcom
 

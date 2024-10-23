@@ -2,16 +2,9 @@
 #![no_main]
 
 use core::arch::asm;
-use core::ptr::read_volatile;
-use core::sync::atomic::{AtomicBool, Ordering};
 use core::{arch::global_asm, hint::black_box};
 
-use rpi::gpio::{Alternate5, Pin};
-use rpi::mmu::{
-    AccessPermissions, MemoryAttributes, MemoryType, SectionBaseAddress, SectionDescriptor,
-    TRANSLATION_TABLE,
-};
-use rpi::uart::MiniUart;
+use rpi::mmu::TRANSLATION_TABLE;
 use rpi::{data_memory_barrier, data_synchronization_barrier};
 
 // const GPFSEL3: usize = 0x2020000C;
@@ -26,6 +19,9 @@ global_asm!(include_str!("boot.s"),
     SVC_MODE = const ProcessorMode::Supervisor as u32
 );
 
+/// Things we do in the first stage:
+/// - Set up and enable the MMU
+/// - Change the processor mode to system mode
 #[unsafe(no_mangle)]
 pub extern "C" fn first_stage() -> ! {
     // let mut uart = MiniUart::get().unwrap();
@@ -49,8 +45,6 @@ pub extern "C" fn first_stage() -> ! {
         // Invalidate caches and TLB
         asm!("mcr p15, 0, {0}, c7, c7, 0
               mcr p15, 0, {0}, c8, c7, 0", in(reg) 0, options(nostack, nomem, preserves_flags));
-        // Instruction cache is disabled by default, and thus does not need invalidation.
-        //
         // bit 12: enable L1 instruction cache
         // bit 11: enable branch prediction
         // bit 2: enable L1 data cache
@@ -77,16 +71,16 @@ enum ProcessorMode {
     System = 0b11111,
 }
 
-unsafe fn get32(addr: usize) -> u32 {
-    core::ptr::read_volatile(addr as *const u32)
-}
-
-unsafe fn put32(adder: usize, value: u32) {
-    core::ptr::write_volatile(adder as *mut u32, value);
-}
-
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
+    unsafe fn get32(addr: usize) -> u32 {
+        core::ptr::read_volatile(addr as *const u32)
+    }
+
+    unsafe fn put32(adder: usize, value: u32) {
+        core::ptr::write_volatile(adder as *mut u32, value);
+    }
+    
     const BLINK_DELAY: u32 = 0x400000;
     fn delay(mut n: u32) {
         while n > 0 {

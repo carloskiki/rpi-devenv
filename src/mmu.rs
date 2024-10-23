@@ -11,12 +11,15 @@
 // - Set the translation table `N` value equal to 0.
 // - Disable the instruction cache.
 // - Enable the MMU.
+// TODO: Maybe only the `text` section should be executable, to avoid nasty bugs.
 pub static TRANSLATION_TABLE: TranslationTable = {
-    let mut table = [SectionDescriptor::disabled(); 4096];
+    const TABLE_SIZE: usize = 4096;
+    let mut table = [SectionDescriptor::disabled(); TABLE_SIZE];
+    const STACK_SIZE: usize = 1; // In MB
     const MMIO_START: usize = 512; // In MB, starts at 0x20000000
     const MMIO_LEN: usize = 16; // In MB, ends at 0x20FFFFFF
     let mut index = 0;
-    while index < MMIO_START {
+    while index < MMIO_START - STACK_SIZE {
         table[index] = SectionDescriptor::new(
             SectionBaseAddress::Section(index as u16),
             AccessPermissions::ReadWrite,
@@ -42,6 +45,26 @@ pub static TRANSLATION_TABLE: TranslationTable = {
                 execute: false,
                 global: true,
                 memory_type: MemoryType::Device { shareable: true },
+            },
+        );
+        index += 1;
+    }
+
+    // Map the stack at the top of the address space, and it points to the top of the available
+    // RAM.
+    index = TABLE_SIZE - STACK_SIZE;
+    while index < TABLE_SIZE {
+        table[index] = SectionDescriptor::new(
+            SectionBaseAddress::Section(index as u16 - (TABLE_SIZE - MMIO_START) as u16),
+            AccessPermissions::ReadWrite,
+            MemoryAttributes {
+                execute: true,
+                global: true,
+                memory_type: MemoryType::Normal {
+                    inner: CachePolicy::WriteBack,
+                    outer: CachePolicy::WriteBack,
+                    shareable: true,
+                },
             },
         );
         index += 1;

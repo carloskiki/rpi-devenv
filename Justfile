@@ -7,11 +7,11 @@ out BIN="kernel": (build BIN) (copy BIN) eject
 # Build the binary
 build BIN="kernel":
     cd {{BIN}} && cargo build --release
-    rust-objcopy -S target/arm-none-eabihf/release/{{BIN}} -O binary target/arm-none-eabihf/release/{{BIN}}.img
+    rust-objcopy -S target/armv6a-none-eabihf/release/{{BIN}} -O binary target/armv6a-none-eabihf/release/{{BIN}}.img
 
 # Copy the binary file to specified drive
 copy BIN="kernel":
-    cp target/arm-none-eabihf/release/{{BIN}}.img /Volumes/$OUT_DRIVE/kernel.img
+    cp target/armv6a-none-eabihf/release/{{BIN}}.img /Volumes/$OUT_DRIVE/kernel.img
 
 # Eject the specified drive
 eject:
@@ -19,7 +19,7 @@ eject:
 
 qemu BIN *EXTRA_ARGS:
     cd {{BIN}} && cargo build
-    qemu-system-arm -M raspi0 {{EXTRA_ARGS}} -kernel target/arm-none-eabihf/debug/{{BIN}}
+    qemu-system-arm -M raspi0 {{EXTRA_ARGS}} -kernel target/armv6a-none-eabihf/debug/{{BIN}}
 
 bootcom port BIN="kernel": (build BIN)
-    cd bootcom && cargo r -- {{port}} ../target/arm-none-eabihf/release/{{BIN}}.img
+    cd bootcom && cargo r -- {{port}} ../target/armv6a-none-eabihf/release/{{BIN}}.img
