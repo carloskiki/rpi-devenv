@@ -72,3 +72,8 @@ isr:
     // Restore all registers.
     ldmfd sp!, {{r0-r12}}
     rfefd sp!
+
+to_system_mode:
+    cpsie aif, #{SYSTEM_MODE}
+    ldr sp, ={SYSTEM_MODE_STACK}
+    bx lr

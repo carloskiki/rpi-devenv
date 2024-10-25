@@ -1,14 +1,12 @@
 #![no_std]
 #![no_main]
 
-use core::arch::asm;
-use core::ptr::{read_volatile, write_volatile};
 use core::{arch::global_asm, hint::black_box};
 
 use rpi::gpio::{Alternate5, Pin};
-use rpi::mmu::{enable_mmu, TRANSLATION_TABLE};
+use rpi::mmu::{enable_mmu, STACK_TOP};
 use rpi::uart::MiniUart;
-use rpi::{data_memory_barrier, data_synchronization_barrier};
+use rpi::data_memory_barrier;
 
 // const GPFSEL3: usize = 0x2020000C;
 const GPFSEL4: usize = 0x20200010;
@@ -17,8 +15,15 @@ const GPCLR1: usize = 0x2020002C;
 
 global_asm!(include_str!("boot.s"),
     ABORT_MODE = const ProcessorMode::Abort as u32,
-    SVC_MODE = const ProcessorMode::Supervisor as u32
+    SVC_MODE = const ProcessorMode::Supervisor as u32,
+    SYSTEM_MODE = const ProcessorMode::System as u32,
+    SYSTEM_MODE_STACK = const STACK_TOP,
 );
+
+unsafe extern "C" {
+    // Switch to system mode, and enable all interrupts.
+    fn to_system_mode();
+}
 
 /// Things we do in the first stage:
 /// - Set up and enable the MMU
@@ -36,7 +41,8 @@ pub extern "C" fn first_stage() -> ! {
 
     enable_mmu();
 
-    to_system_mode();
+    // Safety: We know that this routine provided by our boot code is OK
+    unsafe { to_system_mode() };
 
     rx_tx.send_blocking("MMU enabled\n".bytes());
 
@@ -108,5 +114,3 @@ pub unsafe extern "C" fn interrupt_handler() {
 pub unsafe extern "C" fn interrupt_panic() -> ! {
     panic!()
 }
-
-fn to_system_mode() {}

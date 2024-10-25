@@ -55,10 +55,10 @@ pub static TRANSLATION_TABLE: TranslationTable = {
         index += 1;
     }
 
-    // Map the stack at the top of the address space, and it points to the top of the available
-    // RAM.
-    index = TABLE_SIZE - STACK_SIZE;
-    while index < TABLE_SIZE {
+    // Map the stack at the top of the address space, minus one MB. Like this: 0xFFF00000 -
+    // 0xFFx00000. where x is the stack size.
+    index = TABLE_SIZE - STACK_SIZE - 1;
+    while index < TABLE_SIZE - 1 {
         table[index] = SectionDescriptor::new(
             SectionBaseAddress::Section(index as u16 - (TABLE_SIZE - MMIO_START) as u16),
             AccessPermissions::ReadWrite,
@@ -77,6 +77,8 @@ pub static TRANSLATION_TABLE: TranslationTable = {
 
     TranslationTable(table)
 };
+
+pub const STACK_TOP: usize = 0xFFF00000;
 
 #[repr(C, align(16384))]
 pub struct TranslationTable(pub [SectionDescriptor; 4096]);
@@ -222,6 +224,7 @@ pub enum CachePolicy {
     WriteAllocate,
 }
 
+// TODO: Move this to asm
 pub fn enable_mmu() {
     // Safety: Everything is documented in the ARMv6 Architecture Reference Manual.
     unsafe {
