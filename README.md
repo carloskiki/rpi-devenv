@@ -67,10 +67,10 @@ How do we set up the MMU?
     Either: Use the lock but don't check with get_unchecked, or have a peripheral `init` that deactivates the miniuart
     when QEMU is used. We could also have a config flag that checks if the bin is compiled for QEMU.
 - [x] Make a stack for ABORT mode and a stack for SVC.
-- [ ] Map the SYSTEM stack to a protected place in memory.
+- [x] Map the SYSTEM stack to a protected place in memory.
 - [x] Make Undef use the ABORT cpu mode
 - [x] Make IRQ use SVC mode
-- [ ] Test to make sure that SVC stack pointer always gets reset after interrupt handling.
+- [x] Test to make sure that SVC stack pointer always gets reset after interrupt handling.
     Why would it not? We pop everything from the stack in asm, and rust functions must not just indefinitely increase stack size.
 
 - [ ] Setup interrupt handling.

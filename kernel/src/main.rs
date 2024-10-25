@@ -3,31 +3,21 @@
 
 use core::{arch::global_asm, hint::black_box};
 
-use rpi::gpio::{Alternate5, Pin};
-use rpi::mmu::{enable_mmu, STACK_TOP};
-use rpi::uart::MiniUart;
 use rpi::data_memory_barrier;
+use rpi::gpio::{Alternate5, Pin};
+use rpi::mmu::{STACK_TOP, TRANSLATION_TABLE};
+use rpi::uart::MiniUart;
 
-// const GPFSEL3: usize = 0x2020000C;
-const GPFSEL4: usize = 0x20200010;
-const GPSET1: usize = 0x20200020;
-const GPCLR1: usize = 0x2020002C;
-
-global_asm!(include_str!("boot.s"),
+global_asm!(
+    include_str!("boot.s"),
+    TRANSLATION_TABLE = sym TRANSLATION_TABLE,
     ABORT_MODE = const ProcessorMode::Abort as u32,
+    ABORT_MODE_STACK = const 0x4000,
     SVC_MODE = const ProcessorMode::Supervisor as u32,
     SYSTEM_MODE = const ProcessorMode::System as u32,
     SYSTEM_MODE_STACK = const STACK_TOP,
 );
 
-unsafe extern "C" {
-    // Switch to system mode, and enable all interrupts.
-    fn to_system_mode();
-}
-
-/// Things we do in the first stage:
-/// - Set up and enable the MMU
-/// - Change the processor mode to system mode
 #[unsafe(no_mangle)]
 pub extern "C" fn first_stage() -> ! {
     // Safety: QEMU is a bitch
@@ -39,13 +29,8 @@ pub extern "C" fn first_stage() -> ! {
     let mut rx_tx = uart.enable_transmitter(tx_pin).enable_receiver(rx_pin);
     rx_tx.send_blocking("hello world\n".bytes());
 
-    enable_mmu();
-
-    // Safety: We know that this routine provided by our boot code is OK
-    unsafe { to_system_mode() };
-
     rx_tx.send_blocking("MMU enabled\n".bytes());
-
+    
     loop {}
 }
 
@@ -71,6 +56,9 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
     }
 
     const BLINK_DELAY: u32 = 0x400000;
+    const GPFSEL4: usize = 0x20200010;
+    const GPSET1: usize = 0x20200020;
+    const GPCLR1: usize = 0x2020002C;
     fn delay(mut n: u32) {
         while n > 0 {
             n -= 1;

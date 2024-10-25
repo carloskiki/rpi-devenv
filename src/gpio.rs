@@ -1,6 +1,6 @@
 use core::{
     ptr::{read_volatile, write_volatile},
-    sync::atomic::AtomicU32,
+    sync::atomic::{AtomicU32, Ordering},
 };
 
 use crate::{impl_sealed, data_memory_barrier, Sealed};
@@ -26,42 +26,38 @@ impl GpioSet {
     fn lock<const PIN: u8>(&self) -> bool {
         const { assert!(PIN < 53, "invalid pin number, only pins 0-53 are valid.") };
 
-        // TODO: Implement this when MMU is enabled.
-        // if PIN < 32 {
-        //     let mask = 1 << PIN;
-        //     self.lower
-        //         .fetch_or(mask, Ordering::Acquire)
-        //         & mask
-        //         != 0
-        // } else {
-        //     let mask = 1 << (PIN - 32);
-        //     self.upper
-        //         .fetch_or(mask, Ordering::Acquire)
-        //         & mask
-        //         != 0
-        // }
-        true
+        if PIN < 32 {
+            let mask = 1 << PIN;
+            self.lower
+                .fetch_or(mask, Ordering::Acquire)
+                & mask
+                != 0
+        } else {
+            let mask = 1 << (PIN - 32);
+            self.upper
+                .fetch_or(mask, Ordering::Acquire)
+                & mask
+                != 0
+        }
     }
 
     /// Returns true if it was unlocked, false if it was already unlocked.
     fn unlock<const PIN: u8>(&self) -> bool {
         const { assert!(PIN < 53, "invalid pin number, only pins 0-53 are valid.") };
 
-        // TODO: Implement this when MMU is enabled.
-        // if PIN < 32 {
-        //     let mask = 1 << PIN;
-        //     self.lower
-        //         .fetch_and(!mask, Ordering::Release)
-        //         & mask
-        //         != 0
-        // } else {
-        //     let mask = 1 << (PIN - 32);
-        //     self.upper
-        //         .fetch_and(!mask, Ordering::Release)
-        //         & mask
-        //         != 0
-        // }
-        true
+        if PIN < 32 {
+            let mask = 1 << PIN;
+            self.lower
+                .fetch_and(!mask, Ordering::Release)
+                & mask
+                != 0
+        } else {
+            let mask = 1 << (PIN - 32);
+            self.upper
+                .fetch_and(!mask, Ordering::Release)
+                & mask
+                != 0
+        }
     }
 }
 
