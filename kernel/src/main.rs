@@ -1,9 +1,11 @@
 #![no_std]
 #![no_main]
 
-use core::sync::atomic::AtomicU8;
+use core::ptr;
+use core::task::{Context, RawWaker, RawWakerVTable, Waker};
 use core::{arch::global_asm, hint::black_box};
 
+use core::future::Future;
 use embassy_time::Timer;
 use rpi::mmu::{STACK_TOP, TRANSLATION_TABLE};
 use rpi::{data_memory_barrier, interrupt};
@@ -18,14 +20,22 @@ global_asm!(
     SYSTEM_MODE_STACK = const STACK_TOP,
 );
 
+static NOOP_VTABLE: RawWakerVTable = RawWakerVTable::new(
+    |_| RawWaker::new(ptr::null(), &NOOP_VTABLE),
+    |_| {},
+    |_| {},
+    |_| {},
+);
+
 #[unsafe(no_mangle)]
 pub extern "C" fn first_stage() -> ! {
     // Enable interrupts
-    // unsafe { interrupt::setup() };
-
-    let x = AtomicU8::new(0);
-    x.swap(1, core::sync::atomic::Ordering::AcqRel);
-    black_box(x);
+    interrupt::setup();
+    let mut timer = Timer::after_secs(1);
+    let pinned_timer = core::pin::Pin::new(&mut timer);
+    let waker = unsafe { Waker::from_raw(RawWaker::new(core::ptr::null(), &NOOP_VTABLE)) };
+    let mut context = Context::from_waker(&waker);
+    pinned_timer.poll(&mut context);
     
     loop {}
 }

@@ -2,12 +2,7 @@
 target = "../armv6a-none-eabihf.json"
 
 [target.armv6a-none-eabihf]
-rustflags = [
-    "-C",
-    "link-arg=-Tkernel/link.x",
-    "-C",
-    "link-arg=-znostart-stop-gc",
-]
+rustflags = ["-C", "link-arg=-Tkernel/link.x"]
 
 [unstable]
 build-std = ["core", "compiler_builtins"]
