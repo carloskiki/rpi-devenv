@@ -196,3 +196,8 @@ time_driver_impl!(static DRIVER: SystemTimeDriver = SystemTimeDriver {
     c1: Mutex::new(Cell::new(None)),
     c3: Mutex::new(Cell::new(None)),
 });
+
+pub static DEBUG_DRIVER: SystemTimeDriver = SystemTimeDriver {
+    c1: Mutex::new(Cell::new(None)),
+    c3: Mutex::new(Cell::new(None)),
+};

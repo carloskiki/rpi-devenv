@@ -93,11 +93,6 @@ unsafe extern "C" fn interrupt_handler() {
     // - You cannot deterministically cause an interrupt, because then the handler will be called again
     //  in a recursive loop, right after the handler finishes handling the current one.
     
-    // What I currently believe is happening:
-    // - If the interrupt is not handled, the interrupt handler may be called again.
-    // - If an interrupt occurs, but they are not enabled in the cpsr, the interrupt handler will be
-    // called once interrupts are enabled.
-    //
     // The strategy:
     // - Disable interrupts (already done before entering this function).
     // - Read the interrupt register, and handle all pending interrupts.
@@ -111,26 +106,27 @@ unsafe extern "C" fn interrupt_handler() {
     //  interrupts, because we might have interrupted something in the middle of a read or write
     //  to a peripheral.
 
-    // What if we do not clear the interrupt?
-    // data_memory_barrier();
-    // // Safety: The register is defined in the BCM2835 manual. See section 7.5.
-    // // A data memory barrier is used to ensure that the reads from the registers are not
-    // // reordered.
-    // let (pending1, pending2) =
-    //     unsafe { (IRQ_PENDING_1.read_volatile(), IRQ_PENDING_2.read_volatile()) };
+    data_memory_barrier();
+    // Safety: The register is defined in the BCM2835 manual. See section 7.5.
+    // A data memory barrier is used to ensure that the reads from the registers are not
+    // reordered.
+    let (pending1, pending2) =
+        unsafe { (IRQ_PENDING_1.read_volatile(), IRQ_PENDING_2.read_volatile()) };
 
-    // for InterruptDescriptor { bit, handler } in INTERRUPT_SOURCES {
-    //     data_memory_barrier();
-    //     if bit < &32 {
-    //         // Safety: Same as above.
-    //         if pending1 & (1 << bit) != 0 {
-    //             handler();
-    //         }
-    //     } else {
-    //         // Safety: Same as above.
-    //         if pending2 & (1 << (bit - 32)) != 0 {
-    //             handler();
-    //         }
-    //     }
-    // }
+    for InterruptDescriptor { bit, handler } in INTERRUPT_SOURCES {
+        data_memory_barrier();
+        if bit < &32 {
+            // Safety: Same as above.
+            if pending1 & (1 << bit) != 0 {
+                handler();
+            }
+        } else {
+            // Safety: Same as above.
+            if pending2 & (1 << (bit - 32)) != 0 {
+                handler();
+            }
+        }
+    }
+
+    data_memory_barrier();
 }

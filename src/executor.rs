@@ -1,4 +1,5 @@
 use core::{
+    arch::asm,
     marker::PhantomData,
     ptr::null_mut,
     sync::atomic::{AtomicBool, Ordering},
@@ -20,7 +21,7 @@ pub struct Executor {
 
 impl Executor {
     pub fn new() -> Self {
-        Default::default()
+        Self::default()
     }
 
     pub fn run(&'static mut self, init: impl FnOnce(Spawner)) -> ! {
@@ -46,8 +47,12 @@ impl Executor {
                 // guarantees from the `SeqCst` ensures that the store from `__pender` is seen by
                 // us, or happens during `WFI`, in which case it will be seen.
                 if !WORK_SIGNALED.swap(false, Ordering::SeqCst) {
-                    // if not, wait for interrupt
-                    todo!("Use WFI")
+                    // Wait for Interrupt
+                    // Safety: The instruction is defined in the ARMv6 manual. See section
+                    // B6.6.5.
+                    unsafe {
+                        asm!("mcr p15, 0, {}, c7, c0, 4", out(reg) _, options(nostack, nomem, preserves_flags))
+                    };
                 }
             });
             // Once woken from WFI, interrupts occur here.

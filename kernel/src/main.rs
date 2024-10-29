@@ -1,13 +1,10 @@
 #![no_std]
 #![no_main]
 
-use core::ptr;
-use core::task::{Context, RawWaker, RawWakerVTable, Waker};
-use core::{arch::global_asm, hint::black_box};
+use core::{arch::global_asm, hint::black_box, ptr};
 
-use core::future::Future;
-use embassy_time::Timer;
-use rpi::mmu::{STACK_TOP, TRANSLATION_TABLE};
+use rpi::{mmu::{STACK_TOP, TRANSLATION_TABLE}, system_time::driver::DEBUG_DRIVER};
+use embassy_time_driver::Driver;
 use rpi::{data_memory_barrier, interrupt};
 
 global_asm!(
@@ -20,25 +17,18 @@ global_asm!(
     SYSTEM_MODE_STACK = const STACK_TOP,
 );
 
-static NOOP_VTABLE: RawWakerVTable = RawWakerVTable::new(
-    |_| RawWaker::new(ptr::null(), &NOOP_VTABLE),
-    |_| {},
-    |_| {},
-    |_| {},
-);
-
 #[unsafe(no_mangle)]
 pub extern "C" fn first_stage() -> ! {
     // Enable interrupts
     interrupt::setup();
-    let mut timer = Timer::after_secs(1);
-    let pinned_timer = core::pin::Pin::new(&mut timer);
-    let waker = unsafe { Waker::from_raw(RawWaker::new(core::ptr::null(), &NOOP_VTABLE)) };
-    let mut context = Context::from_waker(&waker);
-    pinned_timer.poll(&mut context);
+
+    let alarm = unsafe { DEBUG_DRIVER.allocate_alarm().unwrap() };
+    DEBUG_DRIVER.set_alarm_callback(alarm, |_| {}, ptr::null_mut());
+    DEBUG_DRIVER.set_alarm(alarm, 1_000_000);
     
     loop {}
 }
+
 
 #[repr(u8)]
 enum ProcessorMode {
