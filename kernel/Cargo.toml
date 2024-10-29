@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+embassy-time = "0.3.2"
 rpi = { workspace = true }
 
 [[bin]]

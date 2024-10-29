@@ -12,6 +12,10 @@
 pub mod gpio;
 pub mod uart;
 pub mod mmu;
+pub mod system_time;
+pub mod critical_section;
+pub mod interrupt;
+pub mod executor;
 
 use core::arch::asm;
 

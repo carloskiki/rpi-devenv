@@ -1,12 +1,12 @@
 #![no_std]
 #![no_main]
 
+use core::sync::atomic::AtomicU8;
 use core::{arch::global_asm, hint::black_box};
 
-use rpi::data_memory_barrier;
-use rpi::gpio::{Alternate5, Pin};
+use embassy_time::Timer;
 use rpi::mmu::{STACK_TOP, TRANSLATION_TABLE};
-use rpi::uart::MiniUart;
+use rpi::{data_memory_barrier, interrupt};
 
 global_asm!(
     include_str!("boot.s"),
@@ -20,16 +20,12 @@ global_asm!(
 
 #[unsafe(no_mangle)]
 pub extern "C" fn first_stage() -> ! {
-    // Safety: QEMU is a bitch
-    let mut uart = unsafe { MiniUart::get_unchecked() };
-    uart.set_bit_mode(true);
-    uart.set_baud_rate(115200);
-    let tx_pin: Pin<14, Alternate5> = Pin::get().unwrap();
-    let rx_pin: Pin<15, Alternate5> = Pin::get().unwrap();
-    let mut rx_tx = uart.enable_transmitter(tx_pin).enable_receiver(rx_pin);
-    rx_tx.send_blocking("hello world\n".bytes());
+    // Enable interrupts
+    // unsafe { interrupt::setup() };
 
-    rx_tx.send_blocking("MMU enabled\n".bytes());
+    let x = AtomicU8::new(0);
+    x.swap(1, core::sync::atomic::Ordering::AcqRel);
+    black_box(x);
     
     loop {}
 }
@@ -89,12 +85,6 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
         }
         delay(BLINK_DELAY);
     }
-}
-
-// IMPORTANT: You only have 16KiB of stack space. Do not use more than that.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn interrupt_handler() {
-    // TODO: ...
 }
 
 /// The interrupt handler for Data Abort, Prefecth Abort, and Undefined Instructions.

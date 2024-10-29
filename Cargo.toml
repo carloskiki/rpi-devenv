@@ -16,6 +16,10 @@ test = false
 bench = false
 
 [dependencies]
+embassy-executor = "0.6.1"
+embassy-time-driver = { version = "0.1.0", features = ["tick-hz-1_000_000"] }
+critical-section = { version = "1.2.0", features = ["restore-state-bool"] }
+
 
 # Optimize for size
 # [profile.release]

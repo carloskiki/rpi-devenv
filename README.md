@@ -73,10 +73,16 @@ How do we set up the MMU?
 - [x] Test to make sure that SVC stack pointer always gets reset after interrupt handling.
     Why would it not? We pop everything from the stack in asm, and rust functions must not just indefinitely increase stack size.
 
-- [ ] Setup interrupt handling.
-- [ ] Have Async GPIO handling.
+- [x] Setup interrupt handling.
+- [x] Have Async Timer handling.
+- [ ] Finish up the executor.
+- [ ] Test beliefs in interrupt handler.
+- [ ] Async GPIO handling.
+- [ ] Async MiniUart.
 
-- [ ] Have a test framework
+- [ ] Have a test framework for QEMU, that should also be able to run on the PI.
+- [ ] Driver implementation for all components.
+- [ ] Do we need a heap?
 
 ## Future Things
 - [ ] Enable FIQ

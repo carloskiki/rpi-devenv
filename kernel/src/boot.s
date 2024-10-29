@@ -107,9 +107,10 @@ abort_with_panic:
     b interrupt_panic
 
 isr:
-    // Enter the instruction in SVC mode.
+    // Enter the interrupt in SVC mode.
     srsfd #{SVC_MODE}!
-    cpsie aif, #{SVC_MODE}
+    // This is only called from handlers in which the IRQ is disabled, so no need to disable it.
+    cpsie af, #{SVC_MODE}
     // Put all registers on the stack.
     stmfd sp!, {{r0-r12}}
     // ... handle the interrupt ...
