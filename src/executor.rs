@@ -1,5 +1,3 @@
-//! An embassy executor for the Raspberry Pi Zero and Zero W.
-
 use core::{
     marker::PhantomData,
     ptr::null_mut,
