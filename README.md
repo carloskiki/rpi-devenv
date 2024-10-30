@@ -40,9 +40,9 @@
 - [x] Setup interrupt handling.
 - [x] Have Async Timer handling.
 - [x] Finish up the executor.
-- [ ] Test beliefs in interrupt handler.
+- [x] Test beliefs in interrupt handler.
 - [ ] Async GPIO handling.
-- [ ] Async MiniUart.
+- [ ] Async MiniUart (Handle RTS/CTS using another rpi for com).
 
 - [ ] Have a test framework for QEMU, that should also be able to run on the PI.
 - [ ] Driver implementation for all components.

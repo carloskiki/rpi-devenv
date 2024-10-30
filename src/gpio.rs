@@ -3,9 +3,12 @@ use core::{
     sync::atomic::{AtomicU32, Ordering},
 };
 
-use crate::{impl_sealed, data_memory_barrier, Sealed};
+use crate::{data_memory_barrier, impl_sealed, Sealed};
 
 const FUNCTION_SELECT_BASE: *mut u32 = 0x20200000 as *mut u32;
+const GPIO_SET_BASE: *mut u32 = 0x2020001C as *mut u32;
+const GPIO_CLEAR_BASE: *mut u32 = 0x20200028 as *mut u32;
+const GPIO_LEVEL_BASE: *mut u32 = 0x20200034 as *mut u32;
 
 static GPIO_SET: GpioSet = GpioSet::new();
 
@@ -28,16 +31,10 @@ impl GpioSet {
 
         if PIN < 32 {
             let mask = 1 << PIN;
-            self.lower
-                .fetch_or(mask, Ordering::Acquire)
-                & mask
-                != 0
+            self.lower.fetch_or(mask, Ordering::Acquire) & mask != 0
         } else {
             let mask = 1 << (PIN - 32);
-            self.upper
-                .fetch_or(mask, Ordering::Acquire)
-                & mask
-                != 0
+            self.upper.fetch_or(mask, Ordering::Acquire) & mask != 0
         }
     }
 
@@ -47,16 +44,10 @@ impl GpioSet {
 
         if PIN < 32 {
             let mask = 1 << PIN;
-            self.lower
-                .fetch_and(!mask, Ordering::Release)
-                & mask
-                != 0
+            self.lower.fetch_and(!mask, Ordering::Release) & mask != 0
         } else {
             let mask = 1 << (PIN - 32);
-            self.upper
-                .fetch_and(!mask, Ordering::Release)
-                & mask
-                != 0
+            self.upper.fetch_and(!mask, Ordering::Release) & mask != 0
         }
     }
 }
@@ -97,6 +88,50 @@ impl<const PIN: u8, T: PinType> Pin<PIN, T> {
         Some(Pin {
             _pin: core::marker::PhantomData,
         })
+    }
+}
+
+impl<const PIN: u8> Pin<PIN, Output> {
+    /// Set the pin high.
+    pub fn set(&self) {
+        data_memory_barrier();
+        if PIN < 32 {
+            // Safety: The register is valid for writing.
+            // Memory barrier used according to the BCM2835 manual section 1.3.
+            unsafe { write_volatile(GPIO_SET_BASE, 1 << PIN) };
+        } else {
+            // Safety: The register is valid for writing.
+            // Memory barrier used according to the BCM2835 manual section 1.3.
+            unsafe { write_volatile(GPIO_SET_BASE.add(1), 1 << (PIN - 32)) };
+        }
+    }
+
+    /// Set the pin low.
+    pub fn clear(&self) {
+        data_memory_barrier();
+        if PIN < 32 {
+            // Safety: The register is valid for writing.
+            // Memory barrier used according to the BCM2835 manual section 1.3.
+            unsafe { write_volatile(GPIO_CLEAR_BASE, 1 << PIN) };
+        } else {
+            // Safety: The register is valid for writing.
+            // Memory barrier used according to the BCM2835 manual section 1.3.
+            unsafe { write_volatile(GPIO_CLEAR_BASE.add(1), 1 << (PIN - 32)) };
+        }
+    }
+
+    /// Returns `true` if the pin is high, `false` if the pin is low.
+    pub fn level(&self) -> bool {
+        data_memory_barrier();
+        if PIN < 32 {
+            // Safety: The register is valid for reading.
+            // Memory barrier used according to the BCM2835 manual section 1.3.
+            unsafe { read_volatile(GPIO_LEVEL_BASE) & (1 << PIN) != 0 }
+        } else {
+            // Safety: The register is valid for reading.
+            // Memory barrier used according to the BCM2835 manual section 1.3.
+            unsafe { read_volatile(GPIO_LEVEL_BASE.add(1)) & (1 << (PIN - 32)) != 0 }
+        }
     }
 }
 
