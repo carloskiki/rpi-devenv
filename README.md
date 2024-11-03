@@ -41,9 +41,10 @@
 - [x] Have Async Timer handling.
 - [x] Finish up the executor.
 - [x] Test beliefs in interrupt handler.
-- [ ] Async GPIO handling.
+- [x] Async GPIO handling.
 - [ ] Async MiniUart (Handle RTS/CTS using another rpi for com).
 
+- [ ] Check if reading from `set` and `clear` gpio registers gives the state of the pin.
 - [ ] Have a test framework for QEMU, that should also be able to run on the PI.
 - [ ] Driver implementation for all components.
 - [ ] Do we need a heap?

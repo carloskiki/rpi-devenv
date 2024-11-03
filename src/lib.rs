@@ -10,34 +10,14 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 pub mod gpio;
-pub mod uart;
 pub mod mmu;
 pub mod system_time;
-pub mod critical_section;
+mod critical_section;
 pub mod interrupt;
 pub mod executor;
+pub mod aux;
 
 use core::arch::asm;
-
-// use bitflags::bitflags;
-// bitflags! {
-//     pub struct InterruptTable: u64 {
-//         const AUXILIARY = 1 << 29;
-//         const I2C_SPI_PERIPHERAL = 1 << 43;
-//         const SMI = 1 << 48;
-//         const GPIO_0 = 1 << 49;
-//         const GPIO_1 = 1 << 50;
-//         const GPIO_2 = 1 << 51;
-//         const GPIO_3 = 1 << 52;
-//         const I2C = 1 << 53;
-//         const SPI = 1 << 54;
-//         const PCM = 1 << 55;
-//         const UART = 1 << 57;
-// 
-// 
-//         const _ = !0;
-//     }
-// }
 
 trait Sealed {}
 

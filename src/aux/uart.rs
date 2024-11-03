@@ -1,10 +1,12 @@
 use core::{
-    convert::Infallible, hint::black_box, ptr::{read_volatile, write_volatile}
+    convert::Infallible,
+    ptr::{read_volatile, write_volatile},
 };
 
 use crate::{
-    gpio::{Alternate5, Pin},
-    impl_sealed, data_memory_barrier, Sealed,
+    data_memory_barrier,
+    gpio::{state::Alternate5, Pin},
+    impl_sealed, Sealed,
 };
 
 const CLOCK_SPEED: u32 = 250_000_000;

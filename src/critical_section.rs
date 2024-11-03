@@ -6,6 +6,8 @@ use crate::interrupt;
 
 struct SingleCoreCriticalSection;
 
+// Safety: The implementation upholds the safety invariants of the `aquire` and `release`
+// functions.
 unsafe impl Impl for SingleCoreCriticalSection {
     unsafe fn acquire() -> RawRestoreState {
         let mut cpsr: u32;

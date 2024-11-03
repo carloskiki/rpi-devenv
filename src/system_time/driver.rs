@@ -45,10 +45,13 @@ pub struct SystemTimeDriver {
 }
 
 impl SystemTimeDriver {
-    fn alarm_interrupt(&self, is_c1: bool) {
+    /// # Safety
+    /// 
+    /// This function is unsafe because it must only be called from an interrupt handler.
+    fn alarm_interrupt(&self, handle: AlarmHandle) {
         data_memory_barrier();
-        let slot = if is_c1 {
-            // Safety: We are reading from a register that is defined in the BCM2835 manual p. 173.
+        let slot = if handle.id() == 0 {
+            // Safety: We are writing to a register that is defined in the BCM2835 manual p. 173.
             // A data barrier is used to ensure that the read is not reordered with another.
             unsafe { write_volatile(SYSTEM_TIME_CS, 1 << 1) };
             &self.c1
@@ -64,12 +67,18 @@ impl SystemTimeDriver {
                 callback,
                 ctx,
             } = slot.borrow(cs).get().expect("Alarm should be set");
-            if timestamp <= self.now() {
-                slot.borrow(cs).set(None);
-                callback(ctx);
-            } else {
-                // Safety: We have checked to make sure that timestamp is in the future, so this is safe.
-                unsafe { set_alarm(slot.borrow(cs), timestamp) };
+            loop {
+                if timestamp <= self.now() {
+                    slot.borrow(cs).set(Some(AlarmState {
+                        timestamp: 0,
+                        callback,
+                        ctx,
+                    }));
+                    callback(ctx);
+                    break;
+                } else if self.set_alarm(handle, timestamp) {
+                    break;
+                }
             }
         });
     }
@@ -141,7 +150,9 @@ impl Driver for SystemTimeDriver {
         critical_section::with(|cs| {
             // Safety: The slot is set to `Some` because we have an alarm handle, and the timestamp
             // was checked to be in the future.
-            unsafe { set_alarm(slot.borrow(cs), timestamp) };
+            let mut state = slot.borrow(cs).take().expect("Alarm should be set");
+            state.timestamp = timestamp;
+            slot.borrow(cs).set(Some(state));
         });
 
         let to_set = core::cmp::min(timestamp.saturating_sub(self.now()), u32::MAX as u64) as u32;
@@ -175,21 +186,26 @@ impl Driver for SystemTimeDriver {
     }
 }
 
-// # Safety
-//
-// This function should only be called with the slot currently set to `Some`, and the timestamp
-// should be checked to be in the future.
-unsafe fn set_alarm(slot: &Cell<Option<AlarmState>>, timestamp: u64) {
-    let mut state = slot.take().expect("Alarm should be set");
-    state.timestamp = timestamp;
-    slot.set(Some(state));
+/// # Safety
+/// 
+/// This function must only be called inside of the c1 timer interrupt handler.
+pub(crate) unsafe fn handler_c1() {
+    // Safety: The time driver has allocated the alarm since the interrupt for it was triggered.
+    let alarm = unsafe {
+        AlarmHandle::new(0)
+    };
+    DRIVER.alarm_interrupt(alarm);
 }
 
-pub(crate) fn handler_c1() {
-    DRIVER.alarm_interrupt(true);
-}
+/// # Safety
+/// 
+/// This function must only be called inside of the c3 timer interrupt handler.
 pub(crate) fn handler_c3() {
-    DRIVER.alarm_interrupt(false);
+    // Safety: The time driver has allocated the alarm since the interrupt for it was triggered.
+    let alarm = unsafe {
+        AlarmHandle::new(1)
+    };
+    DRIVER.alarm_interrupt(alarm);
 }
 
 time_driver_impl!(static DRIVER: SystemTimeDriver = SystemTimeDriver {
