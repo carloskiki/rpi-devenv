@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-embassy-time-driver = "0.1.0"
+embassy-executor = "0.6.1"
 rpi = { workspace = true }
 
 [[bin]]

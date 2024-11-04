@@ -1,0 +1,5 @@
+error: main function return type must be `!`
+ --> tests/ui/wrong_return.rs:2:27
+  |
+2 | const fn kernel_main() -> i32 {
+  |                           ^^^

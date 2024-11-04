@@ -9,35 +9,64 @@
 #![warn(clippy::undocumented_unsafe_blocks)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
+pub mod aux;
+mod critical_section;
+pub mod executor;
 pub mod gpio;
+pub mod interrupt;
 pub mod mmu;
 pub mod system_time;
-mod critical_section;
-pub mod interrupt;
-pub mod executor;
-pub mod aux;
 
-use core::arch::asm;
+use core::arch::{asm, global_asm};
 
-trait Sealed {}
+const ABORT_MODE: u32 = 0b10111;
+const ABORT_MODE_STACK: u32 = 0x4000;
+const SUPERVISOR_MODE: u32 = 0b10011;
+const SYSTEM_MODE: u32 = 0b11111;
 
-impl Sealed for () {}
+global_asm!(
+    include_str!("boot.s"),
+    TRANSLATION_TABLE = sym mmu::TRANSLATION_TABLE,
+    ABORT_MODE = const ABORT_MODE,
+    ABORT_MODE_STACK = const ABORT_MODE_STACK,
+    SVC_MODE = const SUPERVISOR_MODE,
+    SYSTEM_MODE = const SYSTEM_MODE,
+    SYSTEM_MODE_STACK = const mmu::STACK_TOP,
+    PANIC = sym panic,
+    FIRST_STAGE = sym first_stage,
+);
+fn panic() -> ! {
+    panic!()
+}
 
-macro_rules! impl_sealed {
-    ($($t:ty),*) => {
-        $(
-            impl Sealed for $t {}
-        )*
+#[unsafe(no_mangle)]
+pub extern "C" fn first_stage() -> ! {
+    // Enable interrupts
+    interrupt::setup();
+
+    extern "C" {
+        #[link_name = "main"]
+        fn main() -> !;
+    }
+    // Safety: The main function in defined by the user using the `main!` macro.
+    unsafe { main() };
+}
+
+// This is UB if the function is not `() -> !`.
+#[macro_export]
+macro_rules! main {
+    ($fn_decl:tt) => {
+        #[unsafe(export_name = "main")]
+        $fn_decl
     };
 }
-pub(crate) use impl_sealed;
 
 /// Perform a data memory barrier operation.
-/// 
+///
 /// All explicit memory accesses occurring in program order before this operation
 /// will be globally observed before any memory accesses occurring in program
 /// order after this operation. This includes both read and write accesses.
-/// 
+///
 /// This differs from a "data synchronization barrier" in that a data
 /// synchronization barrier will ensure that all previous explicit memory
 /// accesses occurring in program order have fully completed before continuing
@@ -60,3 +89,18 @@ pub fn data_synchronization_barrier() {
         asm!("mcr p15, 0, {}, c7, c10, 4", in(reg) 0, options(nostack, nomem, preserves_flags));
     }
 }
+
+
+trait Sealed {}
+
+impl Sealed for () {}
+
+macro_rules! impl_sealed {
+    ($($t:ty),*) => {
+        $(
+            impl Sealed for $t {}
+        )*
+    };
+}
+pub(crate) use impl_sealed;
+

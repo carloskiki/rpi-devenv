@@ -1,0 +1,7 @@
+error: main function must never return (`-> !`)
+ --> tests/ui/no_return.rs:1:1
+  |
+1 | #[macros::main]
+  | ^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the attribute macro `macros::main` (in Nightly builds, run with -Z macro-backtrace for more info)

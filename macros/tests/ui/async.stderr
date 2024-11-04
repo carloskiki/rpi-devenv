@@ -1,0 +1,5 @@
+error: main function cannot be async
+ --> tests/ui/async.rs:4:1
+  |
+4 | async fn kernel_main() -> ! {
+  | ^^^^^

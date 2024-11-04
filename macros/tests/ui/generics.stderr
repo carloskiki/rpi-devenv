@@ -1,0 +1,5 @@
+error: main function cannot have generic parameters
+ --> tests/ui/generics.rs:2:11
+  |
+2 | fn my_main<const N: usize, 'a, T>() {}
+  |           ^^^^^^^^^^^^^^^^^^^^^^^

@@ -1,5 +1,5 @@
 [workspace]
-members = ["bootloader", "bootcom", "kernel"]
+members = ["bootloader", "bootcom", "kernel", "macros"]
 
 [workspace.dependencies]
 rpi = { path = "." }

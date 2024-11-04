@@ -94,7 +94,7 @@ enable_mmu:
 	mcr	p15, #0, r4, c7, c10, #4
 
     // Call into Rust.
-    b first_stage
+    b {FIRST_STAGE}
 
 hang:
     b hang
@@ -104,7 +104,7 @@ abort_with_panic:
     // Store some register values to have better debugging information in gdb.
     mrc p15, 0, r0, c5, c0, 0
     mrc p15, 0, r1, c6, c0, 0
-    b interrupt_panic
+    b {PANIC}
 
 isr:
     // Enter the interrupt in SVC mode.
@@ -118,4 +118,3 @@ isr:
     // Restore all registers.
     ldmfd sp!, {{r0-r12}}
     rfefd sp!
-

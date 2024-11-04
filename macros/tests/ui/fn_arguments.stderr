@@ -1,0 +1,5 @@
+error: main function cannot have parameters
+ --> tests/ui/fn_arguments.rs:2:20
+  |
+2 | pub fn kernel_main(a: u32) {}
+  |                    ^^^^^^

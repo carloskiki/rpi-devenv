@@ -1,0 +1,5 @@
+error: this macro takes no arguments
+ --> tests/ui/attr_arguments.rs:1:16
+  |
+1 | #[macros::main(name = "kernel_main")]
+  |                ^^^^^^^^^^^^^^^^^^^^
