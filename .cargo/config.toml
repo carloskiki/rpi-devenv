@@ -1,5 +1,5 @@
 [build]
-target = "../armv6a-none-eabihf.json"
+target = "armv6a-none-eabihf.json"
 
 [target.armv6a-none-eabihf]
 rustflags = ["-C", "link-arg=-Tkernel/link.x"]

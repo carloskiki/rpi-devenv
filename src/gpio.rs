@@ -9,7 +9,6 @@ use core::{
     task::{Poll, Waker},
 };
 
-use bitvec::{order::Lsb0, view::BitView};
 use critical_section::Mutex;
 use embedded_hal::digital::{self, InputPin, OutputPin};
 use embedded_hal_async::digital::Wait;
@@ -177,7 +176,7 @@ impl<const PIN: u8> InputPin for &Pin<PIN, Input> {
     }
 }
 
-impl <const PIN: u8> InputPin for Pin<PIN, Input> {
+impl<const PIN: u8> InputPin for Pin<PIN, Input> {
     fn is_high(&mut self) -> Result<bool, Self::Error> {
         data_memory_barrier();
         // Safety: Both this address and the following one are valid for reading.
@@ -198,40 +197,35 @@ impl <const PIN: u8> InputPin for Pin<PIN, Input> {
 impl<const PIN: u8> Wait for Pin<PIN, Input> {
     fn wait_for_high(&mut self) -> impl Future<Output = Result<(), Self::Error>> {
         MapFuture {
-            future: self
-                .detect(DetectState::HIGH),
+            future: self.detect(DetectState::HIGH),
             map: |()| Ok(()),
         }
     }
 
     fn wait_for_low(&mut self) -> impl Future<Output = Result<(), Self::Error>> {
         MapFuture {
-            future: self
-                .detect(DetectState::LOW),
+            future: self.detect(DetectState::LOW),
             map: |()| Ok(()),
         }
     }
 
     fn wait_for_rising_edge(&mut self) -> impl Future<Output = Result<(), Self::Error>> {
         MapFuture {
-            future: self
-                .detect(DetectState::RISING_EDGE),
+            future: self.detect(DetectState::RISING_EDGE),
             map: |()| Ok(()),
         }
     }
 
     fn wait_for_falling_edge(&mut self) -> impl Future<Output = Result<(), Self::Error>> {
         MapFuture {
-            future: self
-                .detect(DetectState::FALLING_EDGE),
+            future: self.detect(DetectState::FALLING_EDGE),
             map: |()| Ok(()),
         }
     }
 
     fn wait_for_any_edge(&mut self) -> impl Future<Output = Result<(), Self::Error>> {
         MapFuture {
-            future: self
-                .detect(DetectState::RISING_EDGE | DetectState::FALLING_EDGE),
+            future: self.detect(DetectState::RISING_EDGE | DetectState::FALLING_EDGE),
             map: |()| Ok(()),
         }
     }
@@ -401,7 +395,7 @@ pub(crate) fn interrupt_handler1() {
     // Memory barrier used.
     let status = unsafe { read_volatile(DETECT_STATUS_BASE) };
     critical_section::with(|cs| {
-        for bit_index in status.view_bits::<Lsb0>().iter_ones() {
+        for bit_index in (IterOnes { value: status }) {
             let waker = WAKER_SET[bit_index].borrow(cs).take();
             // At the cost of having a slower interrupt handler, we have a smaller waker set.
             // The tradeoff would be to store the `DetectState` in the waker set, but that would
@@ -433,7 +427,7 @@ pub(crate) fn interrupt_handler2() {
     // Memory barrier used.
     let status = unsafe { read_volatile(DETECT_STATUS_BASE.add(1)) };
     critical_section::with(|cs| {
-        for bit_index in status.view_bits::<Lsb0>().iter_ones() {
+        for bit_index in (IterOnes { value: status }) {
             let waker = WAKER_SET[bit_index].borrow(cs).take();
             // At the cost of having a slower interrupt handler, we have a smaller waker set.
             // The tradeoff would be to store the `DetectState` in the waker set, but that would
@@ -481,5 +475,22 @@ where
         let this = self.project();
         let output = core::task::ready!(this.future.poll(cx));
         Poll::Ready((this.map)(output))
+    }
+}
+
+struct IterOnes {
+    value: u32,
+}
+
+impl Iterator for IterOnes {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.value == 0 {
+            return None;
+        }
+        let trailing_zeros = self.value.trailing_zeros() as usize;
+        self.value &= !(1 << trailing_zeros);
+        Some(trailing_zeros)
     }
 }

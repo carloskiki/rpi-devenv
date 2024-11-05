@@ -4,9 +4,10 @@
 use core::{hint::black_box, ptr::{read_volatile, write_volatile}};
 use rpi::{data_memory_barrier, main};
 
-main! {
-    fn main() -> ! {
-        // this is a test
+#[main]
+fn main() -> ! {
+    loop {
+        // Your code here
     }
 }
 

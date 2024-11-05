@@ -18,6 +18,7 @@ pub mod mmu;
 pub mod system_time;
 
 use core::arch::{asm, global_asm};
+pub use macros::main;
 
 const ABORT_MODE: u32 = 0b10111;
 const ABORT_MODE_STACK: u32 = 0x4000;
@@ -45,20 +46,11 @@ pub extern "C" fn first_stage() -> ! {
     interrupt::setup();
 
     extern "C" {
-        #[link_name = "main"]
+        #[link_name = "_main"]
         fn main() -> !;
     }
     // Safety: The main function in defined by the user using the `main!` macro.
     unsafe { main() };
-}
-
-// This is UB if the function is not `() -> !`.
-#[macro_export]
-macro_rules! main {
-    ($fn_decl:tt) => {
-        #[unsafe(export_name = "main")]
-        $fn_decl
-    };
 }
 
 /// Perform a data memory barrier operation.

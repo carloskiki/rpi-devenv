@@ -16,12 +16,12 @@ test = false
 bench = false
 
 [dependencies]
+macros = { path = "./macros" }
 embassy-executor = "0.6.1"
 embassy-time-driver = { version = "0.1.0", features = ["tick-hz-1_000_000"] }
 critical-section = { version = "1.2.0", features = ["restore-state-bool"] }
 bitflags = "2.6.0"
 # This is only used in gpio driver currently, consider removing it if not used more.
-bitvec = { version = "1.0.1", default-features = false, features = ["atomic"] }
 embedded-hal = "1.0.0"
 embedded-hal-async = "1.0.0"
 pin-project-lite = "0.2.6"
