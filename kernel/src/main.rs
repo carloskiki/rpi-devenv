@@ -6,9 +6,17 @@ use core::{
     ptr::{read_volatile, write_volatile},
 };
 use embassy_executor::task;
-use embassy_time::{Duration, Timer};
+use embassy_time::{block_for, Duration, Timer};
 use rpi::{
-    data_memory_barrier, executor::Executor, gpio::{self, state::Output}, hal::digital::OutputPin, main
+    data_memory_barrier,
+    executor::Executor,
+    gpio::{
+        self,
+        state::{Alternate5, Output},
+        Pin,
+    },
+    hal::digital::OutputPin,
+    main,
 };
 
 #[main]
@@ -27,17 +35,16 @@ async fn task() {
         gpio::Pin::get().expect("The pin should not be used anywhere else");
 
     loop {
-        led.set_high().unwrap();
-        Timer::after(Duration::from_secs(1)).await;
         led.set_low().unwrap();
         Timer::after(Duration::from_secs(1)).await;
+        led.set_high().unwrap();
     }
 }
 
 // Blink the led on panic
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
-    const BLINK_DELAY: u32 = 0x400000;
+    const BLINK_DELAY: u32 = 0x4000000;
     const GPFSEL4: *mut u32 = 0x20200010 as _;
     const GPSET1: *mut u32 = 0x20200020 as _;
     const GPCLR1: *mut u32 = 0x2020002C as _;

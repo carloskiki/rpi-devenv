@@ -155,11 +155,14 @@ impl Driver for SystemTimeDriver {
             slot.borrow(cs).set(Some(state));
         });
 
-        let to_set = core::cmp::min(timestamp.saturating_sub(self.now()), u32::MAX as u64) as u32;
+        // TODO: here, we need to set the actual timestamp
         data_memory_barrier();
         // Safety: We are writing to a register that is defined in the BCM2835 manual p. 173. A
         // data barrier is used as the manual requires.
-        unsafe { write_volatile(mmio_ptr, to_set) };
+        //
+        // The cast truncates the timestamp to a 32 bit value, and once the alarm rings we check if
+        // the timestamp is still in the future and set the alarm again if it is.
+        unsafe { write_volatile(mmio_ptr, timestamp as u32) };
 
         if timestamp <= self.now() {
             // Here we have a race condition because the interrupt may or may not have been
