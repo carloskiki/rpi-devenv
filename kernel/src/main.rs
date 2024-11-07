@@ -1,13 +1,36 @@
 #![no_std]
 #![no_main]
 
-use core::{hint::black_box, ptr::{read_volatile, write_volatile}};
-use rpi::{data_memory_barrier, main};
+use core::{
+    hint::black_box,
+    ptr::{read_volatile, write_volatile},
+};
+use embassy_executor::task;
+use embassy_time::{Duration, Timer};
+use rpi::{
+    data_memory_barrier, executor::Executor, gpio::{self, state::Output}, hal::digital::OutputPin, main
+};
 
 #[main]
 fn main() -> ! {
+    let mut executor = Executor::new();
+    // Safety: We know that the main function never returns.
+    let executor: &'static mut Executor = unsafe { core::mem::transmute(&mut executor) };
+    executor.run(|spawner| {
+        spawner.spawn(task()).unwrap();
+    })
+}
+
+#[task]
+async fn task() {
+    let mut led: gpio::Pin<47, Output> =
+        gpio::Pin::get().expect("The pin should not be used anywhere else");
+
     loop {
-        // Your code here
+        led.set_high().unwrap();
+        Timer::after(Duration::from_secs(1)).await;
+        led.set_low().unwrap();
+        Timer::after(Duration::from_secs(1)).await;
     }
 }
 

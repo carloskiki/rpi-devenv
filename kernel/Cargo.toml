@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 embassy-executor = "0.6.1"
+embassy-time = { version = "0.3.2", features = ["generic-queue"] }
 rpi = { workspace = true }
 
 [[bin]]

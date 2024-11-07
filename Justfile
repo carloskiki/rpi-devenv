@@ -22,4 +22,4 @@ qemu BIN *EXTRA_ARGS:
     qemu-system-arm -M raspi0 {{EXTRA_ARGS}} -kernel target/armv6a-none-eabihf/debug/{{BIN}}
 
 bootcom port BIN="kernel": (build BIN)
-    cd bootcom && cargo r -- {{port}} ../target/armv6a-none-eabihf/release/{{BIN}}.img
+    cd ../bootcom && cargo r -- {{port}} ../rpi/target/armv6a-none-eabihf/release/{{BIN}}.img

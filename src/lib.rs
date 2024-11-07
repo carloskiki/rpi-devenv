@@ -18,7 +18,10 @@ pub mod mmu;
 pub mod system_time;
 
 use core::arch::{asm, global_asm};
+
 pub use macros::main;
+pub use embedded_hal as hal;
+pub use embedded_hal_async as hal_async;
 
 const ABORT_MODE: u32 = 0b10111;
 const ABORT_MODE_STACK: u32 = 0x4000;
