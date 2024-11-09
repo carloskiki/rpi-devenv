@@ -40,8 +40,7 @@ pub unsafe fn enable() {
 }
 
 /// Set up interrupt sources in the BCM2835.
-// TODO: This should not be public when the boot file is added to the lib.
-pub fn setup() {
+pub(crate) fn setup() {
     data_memory_barrier();
     
     let mut enable_irqs_1 = 0;
@@ -60,7 +59,7 @@ pub fn setup() {
     }
 }
 
-pub struct InterruptDescriptor {
+struct InterruptDescriptor {
     // TODO: Make sure that this is less than 64, and support basic interrupts.
     pub bit: u8,
     /// # Safety
@@ -70,7 +69,7 @@ pub struct InterruptDescriptor {
     pub handler: unsafe fn(),
 }
 
-pub(crate) static INTERRUPT_SOURCES1: &[InterruptDescriptor] = &[
+static INTERRUPT_SOURCES1: &[InterruptDescriptor] = &[
     // System Timer Interrupts
     InterruptDescriptor {
         bit: 1,
@@ -86,7 +85,7 @@ pub(crate) static INTERRUPT_SOURCES1: &[InterruptDescriptor] = &[
     }
 ];
 
-pub(crate) static INTERRUPT_SOURCES2: &[InterruptDescriptor] = &[
+static INTERRUPT_SOURCES2: &[InterruptDescriptor] = &[
     // System Timer Interrupts
     InterruptDescriptor {
         bit: 49,

@@ -24,8 +24,12 @@ use core::{
 };
 
 use ::critical_section::{CriticalSection, Mutex};
+
 pub use embedded_hal as hal;
 pub use embedded_hal_async as hal_async;
+pub use embedded_hal_nb as hal_nb;
+pub use embedded_io as eio;
+pub use embedded_io_async as eio_async;
 pub use macros::main;
 
 const ABORT_MODE: u32 = 0b10111;
@@ -49,9 +53,16 @@ fn panic() -> ! {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn first_stage() -> ! {
+extern "C" fn first_stage() -> ! {
+    // Initialize peripherals
+    ::critical_section::with(|cs| {
+        // Safety: The function is called in the first stage of the boot process.
+        unsafe { aux::setup(&cs) };
+    });
+    
     // Enable interrupts
     interrupt::setup();
+    
 
     extern "C" {
         #[link_name = "_main"]
@@ -91,8 +102,6 @@ pub fn data_synchronization_barrier() {
 }
 
 trait Sealed {}
-
-impl Sealed for () {}
 
 macro_rules! impl_sealed {
     ($($t:ty),*) => {

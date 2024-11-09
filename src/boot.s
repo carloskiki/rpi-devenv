@@ -33,7 +33,7 @@ reset:
     
     // Setup stack pointer for ABT mode.
     cps #{ABORT_MODE} // change to abt mode
-    mov sp, #{ABORT_MODE_STACK} // TODO: This should not be a magic number.
+    mov sp, #{ABORT_MODE_STACK}
     
     // Setup stack pointer for SVC mode.
     cps #{SVC_MODE} // change to svc mode
