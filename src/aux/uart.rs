@@ -6,10 +6,7 @@ pub mod writer;
 
 use core::ptr::{read_volatile, write_volatile};
 
-use crate::{
-    aux::uart::registers::*,
-    data_memory_barrier,
-};
+use crate::{aux::uart::registers::*, data_memory_barrier};
 
 use critical_section::CriticalSection;
 use reader::RxPin;
@@ -19,13 +16,37 @@ use writer::TxPin;
 // TODO: This should be configurable at build time.
 pub const CLOCK_SPEED: u32 = 250_000_000;
 
-
 pub fn pair<RP: RxPin, TP: TxPin>(
     rx_pin: RP,
     tx_pin: TP,
     config: &Config,
-) -> (reader::Reader<RP>, writer::Writer<TP>) {
-    todo!()
+) -> Option<(reader::Reader<RP>, writer::Writer<TP>)> {
+    data_memory_barrier();
+
+    critical_section::with(|_| {
+        // Safety: Address is valid, and a memory barrier is used. A new `Reader` instance is not
+        // created if the `Reader` already activated in the rx bit.  Critical section used so that
+        // two threads do not race to acquire the lock.
+        unsafe {
+            // Check if receiver is enabled
+            let control_reg = read_volatile(EXTRA_CONTROL_REG);
+            if control_reg & 0b11 != 0 {
+                return None;
+            }
+            // Enable receiver
+            write_volatile(EXTRA_CONTROL_REG, control_reg | 0b11);
+            // Clear fifo
+            write_volatile(INTERRUPT_ID_REG, 0b110);
+        }
+        Some(())
+    })?;
+
+    config.setup();
+
+    Some((
+        reader::Reader { _rx_pin: rx_pin },
+        writer::Writer { _tx_pin: tx_pin },
+    ))
 }
 
 /// Safety: Must be called before main.
@@ -36,7 +57,6 @@ pub(super) unsafe fn setup(_cs: &CriticalSection) {
     unsafe {
         write_volatile(EXTRA_CONTROL_REG, 0);
     }
-    
 }
 
 // Handle interrupts that pertain to the Mini UART peripheral.

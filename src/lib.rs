@@ -59,10 +59,9 @@ extern "C" fn first_stage() -> ! {
         // Safety: The function is called in the first stage of the boot process.
         unsafe { aux::setup(&cs) };
     });
-    
+
     // Enable interrupts
     interrupt::setup();
-    
 
     extern "C" {
         #[link_name = "_main"]

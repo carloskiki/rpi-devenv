@@ -23,7 +23,6 @@ pub(crate) unsafe fn setup(cs: &CriticalSection) {
     }
     // Safety: call before main ensured by the caller.
     unsafe { uart::setup(cs) };
-    
 }
 
 pub(crate) fn interrupt_handler() {

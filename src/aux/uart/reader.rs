@@ -17,11 +17,11 @@ use crate::{
 static READER_WAKER: WakerCell = WAKER_CELL_INIT;
 
 pub struct Reader<P> {
-    _rx_pin: P,
+    pub(super) _rx_pin: P,
 }
 
 impl<P: RxPin> Reader<P> {
-    pub fn new(rx_pin: P, config: Config) -> Option<Self> {
+    pub fn get(rx_pin: P, config: &Config) -> Option<Self> {
         data_memory_barrier();
 
         critical_section::with(|_| {
@@ -31,7 +31,7 @@ impl<P: RxPin> Reader<P> {
             unsafe {
                 // Check if receiver is enabled
                 let control_reg = read_volatile(EXTRA_CONTROL_REG);
-                if control_reg & 1 == 1 {
+                if control_reg & 0b11 != 0 {
                     return None;
                 }
                 // Enable receiver
@@ -139,7 +139,7 @@ impl<P: RxPin> hal_nb::serial::Read for Reader<P> {
 }
 
 /// This implementation is cancel-safe.
-/// 
+///
 /// Because of the way the Mini UART works, using `read` asynchronously will almost always read
 /// only one byte. It is more efficient to use `read_exact` instead.
 impl<P: RxPin> eio_async::Read for Reader<P> {

@@ -46,7 +46,7 @@ pub struct SystemTimeDriver {
 
 impl SystemTimeDriver {
     /// # Safety
-    /// 
+    ///
     /// This function is unsafe because it must only be called from an interrupt handler.
     fn alarm_interrupt(&self, handle: AlarmHandle) {
         data_memory_barrier();
@@ -183,24 +183,20 @@ impl Driver for SystemTimeDriver {
 }
 
 /// # Safety
-/// 
+///
 /// This function must only be called inside of the c1 timer interrupt handler.
 pub(crate) unsafe fn handler_c1() {
     // Safety: The time driver has allocated the alarm since the interrupt for it was triggered.
-    let alarm = unsafe {
-        AlarmHandle::new(0)
-    };
+    let alarm = unsafe { AlarmHandle::new(0) };
     DRIVER.alarm_interrupt(alarm);
 }
 
 /// # Safety
-/// 
+///
 /// This function must only be called inside of the c3 timer interrupt handler.
 pub(crate) fn handler_c3() {
     // Safety: The time driver has allocated the alarm since the interrupt for it was triggered.
-    let alarm = unsafe {
-        AlarmHandle::new(1)
-    };
+    let alarm = unsafe { AlarmHandle::new(1) };
     DRIVER.alarm_interrupt(alarm);
 }
 

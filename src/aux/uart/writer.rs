@@ -7,7 +7,10 @@ use core::{
 };
 
 use crate::{
-    aux::uart::registers::*, data_memory_barrier, eio, eio_async, gpio::{self, state::Alternate5}, hal_nb, set_waker, Sealed, WakerCell, WAKER_CELL_INIT
+    aux::uart::registers::*,
+    data_memory_barrier, eio, eio_async,
+    gpio::{self, state::Alternate5},
+    hal_nb, set_waker, Sealed, WakerCell, WAKER_CELL_INIT,
 };
 
 use super::Config;
@@ -17,11 +20,11 @@ const FIFO_SIZE: u32 = 8;
 static WRITER_WAKER: WakerCell = WAKER_CELL_INIT;
 
 pub struct Writer<P> {
-    _tx_pin: P,
+    pub(super) _tx_pin: P,
 }
 
 impl<P: TxPin> Writer<P> {
-    pub fn new(tx_pin: P, config: &Config) -> Option<Self> {
+    pub fn get(tx_pin: P, config: &Config) -> Option<Self> {
         data_memory_barrier();
 
         critical_section::with(|_| {
@@ -31,7 +34,7 @@ impl<P: TxPin> Writer<P> {
             unsafe {
                 // Check if receiver is enabled
                 let control_reg = read_volatile(EXTRA_CONTROL_REG);
-                if control_reg & 0b10 != 0 {
+                if control_reg & 0b11 != 0 {
                     return None;
                 }
                 // Enable receiver
@@ -180,7 +183,7 @@ impl Future for WriteFut<'_> {
                 // Safety: As above.
                 unsafe { INTERRUPT_ENABLE_REG.write_volatile(reg) };
             });
-            
+
             return Poll::Pending;
         }
 

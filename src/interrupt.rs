@@ -42,7 +42,7 @@ pub unsafe fn enable() {
 /// Set up interrupt sources in the BCM2835.
 pub(crate) fn setup() {
     data_memory_barrier();
-    
+
     let mut enable_irqs_1 = 0;
     let mut enable_irqs_2 = 0;
     for InterruptDescriptor { bit, .. } in INTERRUPT_SOURCES1 {
@@ -82,7 +82,7 @@ static INTERRUPT_SOURCES1: &[InterruptDescriptor] = &[
     InterruptDescriptor {
         bit: 29,
         handler: crate::aux::interrupt_handler,
-    }
+    },
 ];
 
 static INTERRUPT_SOURCES2: &[InterruptDescriptor] = &[
@@ -94,7 +94,7 @@ static INTERRUPT_SOURCES2: &[InterruptDescriptor] = &[
     InterruptDescriptor {
         bit: 50,
         handler: crate::gpio::interrupt_handler2,
-    }
+    },
 ];
 
 /// # Safety
@@ -107,7 +107,7 @@ unsafe extern "C" fn interrupt_handler() {
     // - _Be quick_, because you are _interrupting_ the current execution.
     // - You cannot deterministically cause an interrupt, because then the handler will be called again
     //  in a recursive loop, right after the handler finishes handling the current one.
-    
+
     // The strategy:
     // - Disable interrupts (already done before entering this function).
     // - Read the interrupt register, and handle all pending interrupts.
@@ -147,7 +147,7 @@ unsafe extern "C" fn interrupt_handler() {
             }
         }
     }
-    
+
     // Safety: The register is defined in the BCM2835 manual. See section 7.5.
     // A data memory barrier is used to ensure that the reads from the registers are not
     // reordered.
