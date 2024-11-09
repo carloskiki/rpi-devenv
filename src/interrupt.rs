@@ -79,6 +79,10 @@ pub(crate) static INTERRUPT_SOURCES1: &[InterruptDescriptor] = &[
     InterruptDescriptor {
         bit: 3,
         handler: crate::system_time::driver::handler_c3,
+    },
+    InterruptDescriptor {
+        bit: 29,
+        handler: crate::aux::interrupt_handler,
     }
 ];
 

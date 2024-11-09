@@ -140,10 +140,7 @@ impl Driver for SystemTimeDriver {
         };
 
         if timestamp <= self.now() {
-            critical_section::with(|cs| {
-                slot.borrow(cs).set(None);
-            });
-
+            // We keep the timestamp of the last alarm, or 0 if there was no previous alarm.
             return false;
         }
 
@@ -155,7 +152,6 @@ impl Driver for SystemTimeDriver {
             slot.borrow(cs).set(Some(state));
         });
 
-        // TODO: here, we need to set the actual timestamp
         data_memory_barrier();
         // Safety: We are writing to a register that is defined in the BCM2835 manual p. 173. A
         // data barrier is used as the manual requires.
@@ -169,17 +165,14 @@ impl Driver for SystemTimeDriver {
             // triggered yet. We disable the modified bit in the control/status register so that if
             // it was not, then it will not be triggered, and if it was, then this is a no-op.
             let bitmask = if alarm.id() == 0 { 1 << 1 } else { 1 << 3 };
+            // Safety: We are writing to a register that is defined in the BCM2835 manual p. 173.
+            // A data barrier was used as the manual requires.
+            unsafe { write_volatile(SYSTEM_TIME_CS, bitmask) };
 
             critical_section::with(|cs| {
-                // Safety: We are writing to a register that is defined in the BCM2835 manual p. 173.
-                // A data barrier was used as the manual requires.
-                let mut control_register = unsafe { read_volatile(SYSTEM_TIME_CS) };
-                control_register &= !bitmask;
-                // Safety: We are writing to a register that is defined in the BCM2835 manual p. 173.
-                // A data barrier was used as the manual requires.
-                unsafe { write_volatile(SYSTEM_TIME_CS, control_register) };
-
-                slot.borrow(cs).set(None);
+                let mut alarm_state = slot.borrow(cs).take().expect("Alarm should be set");
+                alarm_state.timestamp = 0;
+                slot.borrow(cs).set(Some(alarm_state));
             });
             return false;
         }

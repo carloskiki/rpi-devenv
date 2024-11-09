@@ -42,9 +42,13 @@
 - [x] Finish up the executor.
 - [x] Test beliefs in interrupt handler.
 - [x] Async GPIO handling.
-- [ ] Async MiniUart (Handle RTS/CTS using another rpi for com).
 
-- [ ] Check if reading from `set` and `clear` gpio registers gives the state of the pin.
+__Tests:__
+- [ ] Check if having pull-up/pull-down matters when pins are in alt mode (e.g., MiniUart)
+- [ ] Check if reading from `set` and `clear` GPIO registers gives the state of the pin.
+
+- [ ] Async MiniUart (Handle RTS/CTS using another rpi for com).
+- [ ] Have a working bootloader - If we lose the SD card we are screwed.
 - [ ] Have a test framework for QEMU, that should also be able to run on the PI.
 - [ ] Driver implementation for all components.
 - [ ] Do we need a heap?
@@ -66,6 +70,27 @@
 
 - In the actual hardware, the memory is not capped at 0x20000000, does not look mirrored either so I don't know what
     is going on there.
+
+## Mini UART Interesting Registers
+IER:
+- Receive interrupt: assert when at least 1 byte in FIFO.
+- TRANSMIT interrupt: assert when transmit FIFO is empty.
+
+LCR:
+- Break: Assert break on TX line.
+
+MCR:
+- RTS (only when not auto-flow): Assert RTS line.
+
+MSR:
+- CTS (only when not auto-flow): Assert CTS line.
+
+LSR:
+- Receiver Overrun: If we lost some bytes when receiving.
+
+CNTL:
+- Various RTS/CTS settings.
+- Auto-flow control.
 
 ## The Bootloader
 

@@ -6,7 +6,7 @@ use core::{
     future::Future,
     ptr::{read_volatile, write_volatile},
     sync::atomic::{AtomicU32, Ordering},
-    task::{Poll, Waker},
+    task::Poll,
 };
 
 use critical_section::Mutex;
@@ -14,7 +14,7 @@ use embedded_hal::digital::{self, InputPin, OutputPin};
 use embedded_hal_async::digital::Wait;
 use state::{DetectState, Input, Output, PinType, Pull};
 
-use crate::data_memory_barrier;
+use crate::{data_memory_barrier, WakerCell};
 
 const FUNCTION_SELECT_BASE: *mut u32 = 0x20200000 as *mut u32;
 const SET_BASE: *mut u32 = 0x2020001C as *mut u32;
@@ -26,7 +26,6 @@ const DETECT_STATUS_BASE: *mut u32 = 0x20200040 as *mut u32;
 
 static GPIO_SET: GpioSet = GpioSet::new();
 
-type WakerCell = Mutex<Cell<Option<Waker>>>;
 static WAKER_SET: [WakerCell; 54] = [const { Mutex::new(Cell::new(None)) }; 54];
 
 struct GpioSet {
@@ -347,26 +346,28 @@ impl<const PIN: u8> Future for Detector<'_, PIN> {
             // called if no detection is set.
             return Poll::Ready(());
         }
-        let waker = Some(cx.waker().clone());
+
         let slot = &WAKER_SET[PIN as usize];
-        let mut old_waker = None;
-        critical_section::with(|cs| {
-            old_waker = slot.borrow(cs).replace(waker);
-        });
         if !self.setup {
+            critical_section::with(|cs| {
+                slot.borrow(cs).set(Some(cx.waker().clone()));
+            });
             self.setup_detection();
             return Poll::Pending;
         }
 
-        if old_waker.is_none() {
-            // The waker was taken by the interrupt routine, we are done.
-            critical_section::with(|cs| {
+        critical_section::with(|cs| {
+            if let Some(mut old_waker) = slot.borrow(cs).take() {
+                // The waker was not taken, we need to set it again.
+                old_waker.clone_from(cx.waker());
+                slot.borrow(cs).set(Some(old_waker));
+                Poll::Pending
+            } else {
+                // The waker was taken by the interrupt routine, we are done.
                 slot.borrow(cs).set(None);
-            });
-            Poll::Ready(())
-        } else {
-            Poll::Pending
-        }
+                Poll::Ready(())
+            }
+        })
     }
 }
 
@@ -404,6 +405,7 @@ pub(crate) fn interrupt_handler1() {
             for register in DetectState::all().registers() {
                 // Safety: We are looking at the first bank, so the offset to the base is 0.
                 // Memory barrier used.
+                // We are also inside a critical section, so we can safely swap.
                 unsafe {
                     let mut bits = read_volatile(register);
                     bits &= !(1 << bit_index);

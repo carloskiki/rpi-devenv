@@ -17,11 +17,16 @@ pub mod interrupt;
 pub mod mmu;
 pub mod system_time;
 
-use core::arch::{asm, global_asm};
+use core::{
+    arch::{asm, global_asm},
+    cell::Cell,
+    task::Waker,
+};
 
-pub use macros::main;
+use ::critical_section::{CriticalSection, Mutex};
 pub use embedded_hal as hal;
 pub use embedded_hal_async as hal_async;
+pub use macros::main;
 
 const ABORT_MODE: u32 = 0b10111;
 const ABORT_MODE_STACK: u32 = 0x4000;
@@ -85,7 +90,6 @@ pub fn data_synchronization_barrier() {
     }
 }
 
-
 trait Sealed {}
 
 impl Sealed for () {}
@@ -97,5 +101,21 @@ macro_rules! impl_sealed {
         )*
     };
 }
-pub(crate) use impl_sealed;
+use impl_sealed;
 
+type WakerCell = Mutex<Cell<Option<Waker>>>;
+#[allow(clippy::declare_interior_mutable_const)]
+const WAKER_CELL_INIT: WakerCell = Mutex::new(Cell::new(None));
+
+/// Set the new waker if it is not equal to the old one.
+///
+/// Returns `true` if a waker was already in the slot, `false` otherwise.
+fn set_waker(slot: &WakerCell, waker_ref: &Waker, cs: CriticalSection) -> bool {
+    let waker = slot.borrow(cs).take();
+    let was_set = waker.is_some();
+    let to_set = waker
+        .filter(|w| w.will_wake(waker_ref))
+        .unwrap_or_else(|| waker_ref.clone());
+    slot.borrow(cs).set(Some(to_set));
+    was_set
+}
