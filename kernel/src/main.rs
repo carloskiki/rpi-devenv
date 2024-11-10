@@ -6,17 +6,8 @@ use core::{
     ptr::{read_volatile, write_volatile},
 };
 use embassy_executor::task;
-use embassy_time::{block_for, Duration, Timer};
 use rpi::{
-    data_memory_barrier,
-    executor::Executor,
-    gpio::{
-        self,
-        state::{Alternate5, Output},
-        Pin,
-    },
-    hal::digital::OutputPin,
-    main,
+    aux::{self}, data_memory_barrier, eio, eio_async::{Read as _, Write as _}, executor::Executor, gpio::{self}, main
 };
 
 #[main]
@@ -25,19 +16,48 @@ fn main() -> ! {
     // Safety: We know that the main function never returns.
     let executor: &'static mut Executor = unsafe { core::mem::transmute(&mut executor) };
     executor.run(|spawner| {
-        spawner.spawn(task()).unwrap();
+        spawner.spawn(blocking_task()).unwrap();
     })
 }
 
-#[task]
-async fn task() {
-    let mut led: gpio::Pin<47, Output> =
-        gpio::Pin::get().expect("The pin should not be used anywhere else");
+// #[task]
+// async fn async_task() {
+//     let config = aux::uart::Config {
+//         baud_rate: aux::uart::BaudRate::new(115200),
+//         bit_mode: aux::uart::BitMode::EightBits,
+//     };
+//     let mut rx =
+//         unsafe { aux::uart::Reader::get_unchecked(gpio::Pin::<15, _>::get().unwrap(), &config) };
+//     let mut tx =
+//         unsafe { aux::uart::Writer::get_unchecked(gpio::Pin::<14, _>::get().unwrap(), &config) };
+// 
+//     tx.write_all(b"Hello, world!\n").await.unwrap();
+// 
+//     let mut buf = [0; 1];
+//     loop {
+//         rx.read_exact(&mut buf).await.unwrap();
+//         tx.write_all(&buf).await.unwrap();
+//     }
+// }
 
+#[task]
+async fn blocking_task() {
+    let config = aux::uart::Config {
+        baud_rate: aux::uart::BaudRate::new(115200),
+        bit_mode: aux::uart::BitMode::EightBits,
+    };
+    let mut rx =
+        unsafe { aux::uart::Reader::get_unchecked(gpio::Pin::<15, _>::get().unwrap(), &config) };
+    let mut tx =
+        unsafe { aux::uart::Writer::get_unchecked(gpio::Pin::<14, _>::get().unwrap(), &config) };
+
+    <aux::uart::writer::Writer<_> as eio::Write>::write_all(&mut tx, b"Hello, world!\n")
+        .unwrap();
+
+    let mut buf = [0; 1];
     loop {
-        led.set_low().unwrap();
-        Timer::after(Duration::from_secs(1)).await;
-        led.set_high().unwrap();
+        <aux::uart::reader::Reader<_> as eio::Read>::read_exact(&mut rx, &mut buf).unwrap();
+        <aux::uart::writer::Writer<_> as eio::Write>::write_all(&mut tx, &buf).unwrap();
     }
 }
 

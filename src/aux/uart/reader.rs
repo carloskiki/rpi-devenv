@@ -46,6 +46,29 @@ impl<P: RxPin> Reader<P> {
 
         Some(Self { _rx_pin: rx_pin })
     }
+
+    /// Get the reader without checking if it is already in use.
+    ///
+    /// # Safety
+    ///
+    /// UB if the reader is already in use.
+    pub unsafe fn get_unchecked(rx_pin: P, config: &Config) -> Self {
+        data_memory_barrier();
+
+        // Safety: Address is valid, and a memory barrier is used. A new `Reader` instance is not
+        // created if the `Reader` already activated in the rx bit.
+        unsafe {
+            // Enable receiver
+            let control_reg = read_volatile(EXTRA_CONTROL_REG);
+            write_volatile(EXTRA_CONTROL_REG, control_reg | 1);
+            // Clear fifo
+            write_volatile(INTERRUPT_ID_REG, 0b10);
+        }
+
+        config.setup();
+
+        Self { _rx_pin: rx_pin }
+    }
 }
 
 impl<P> Drop for Reader<P> {

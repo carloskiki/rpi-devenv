@@ -49,6 +49,29 @@ impl<P: TxPin> Writer<P> {
 
         Some(Self { _tx_pin: tx_pin })
     }
+    
+    /// Get the reader without checking if it is already in use.
+    ///
+    /// # Safety
+    ///
+    /// UB if the reader is already in use.
+    pub unsafe fn get_unchecked(tx_pin: P, config: &Config) -> Self {
+        data_memory_barrier();
+
+        // Safety: Address is valid, and a memory barrier is used. A new `Reader` instance is not
+        // created if the `Reader` already activated in the rx bit.
+        unsafe {
+            // Enable receiver
+            let control_reg = read_volatile(EXTRA_CONTROL_REG);
+            write_volatile(EXTRA_CONTROL_REG, control_reg | 0b10);
+            // Clear fifo
+            write_volatile(INTERRUPT_ID_REG, 0b100);
+        }
+
+        config.setup();
+
+        Self { _tx_pin: tx_pin }
+    }
 }
 
 impl<P> Drop for Writer<P> {
@@ -107,6 +130,14 @@ impl<P: TxPin> eio::Write for Writer<P> {
             core::hint::spin_loop();
         }
         Ok(())
+    }
+}
+
+impl<P: TxPin> eio::WriteReady for Writer<P> {
+    fn write_ready(&mut self) -> Result<bool, Self::Error> {
+        data_memory_barrier();
+        // Safety: Address is valid, memory barrier used.
+        Ok(unsafe { EXTRA_STATUS_REG.read_volatile() } & 0b10 != 0)
     }
 }
 

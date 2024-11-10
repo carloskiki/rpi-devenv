@@ -4,6 +4,9 @@ pub mod reader;
 mod registers;
 pub mod writer;
 
+pub use reader::Reader;
+pub use writer::Writer;
+
 use core::ptr::{read_volatile, write_volatile};
 
 use crate::{aux::uart::registers::*, data_memory_barrier};
