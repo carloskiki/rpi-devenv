@@ -21,27 +21,25 @@
 - [Linux Insides](https://0xax.gitbooks.io/linux-insides/content/index.html) A great book about the Linux kernel
     and how it works.
 
+## GPU Sources
+- [All about accelerated video on the Raspberry Pi](https://forums.raspberrypi.com/viewtopic.php?t=317511)
+- [drm/vc4 Broadcom VC4 Graphics Driver](https://www.kernel.org/doc/html/latest/gpu/vc4.html)
+
 ## TODOs
-- [x] Have a chain loader.
-- [x] Have a working MMU.
-- [x] Understand JTAG - to implement it (implemented by default).
-- [x] Map Undef, Data Abt, and Prefecth Abt to the panic handler.
+### Aux Interface
+#### Uart
+- [ ] Sending break signals
+- [ ] Auto-flow control
+- [ ] Manual RTS/CTS handles
+- [ ] RTS/CTS control flow tied with HAL implementation
 
-- [x] Make it so that we don't need to fuckin change between `get` and `get_unchecked` for QEMU or the pi.
-    Either: Use the lock but don't check with get_unchecked, or have a peripheral `init` that deactivates the miniuart
-    when QEMU is used. We could also have a config flag that checks if the bin is compiled for QEMU.
-- [x] Make a stack for ABORT mode and a stack for SVC.
-- [x] Map the SYSTEM stack to a protected place in memory.
-- [x] Make Undef use the ABORT cpu mode
-- [x] Make IRQ use SVC mode
-- [x] Test to make sure that SVC stack pointer always gets reset after interrupt handling.
-    Why would it not? We pop everything from the stack in asm, and rust functions must not just indefinitely increase stack size.
+Auto-flow:
+- await for CTS before sending data.
+- De-assert RTS when we do not have space in the receive FIFO.
 
-- [x] Setup interrupt handling.
-- [x] Have Async Timer handling.
-- [x] Finish up the executor.
-- [x] Test beliefs in interrupt handler.
-- [x] Async GPIO handling.
+Also propose:
+- RTS handling for transmitter.
+- CTS handling for receiver.
 
 __Tests:__
 - [ ] Check if having pull-up/pull-down matters when pins are in alt mode (e.g., MiniUart)

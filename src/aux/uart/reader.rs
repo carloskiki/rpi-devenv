@@ -16,6 +16,7 @@ use crate::{
 
 static READER_WAKER: WakerCell = WAKER_CELL_INIT;
 
+#[derive(Debug)]
 pub struct Reader<P> {
     pub(super) _rx_pin: P,
 }
@@ -180,6 +181,7 @@ impl<P: RxPin> eio_async::Read for Reader<P> {
     }
 }
 
+#[derive(Debug)]
 pub struct ReadFut<'a> {
     buf: &'a mut [u8],
 }
@@ -221,6 +223,7 @@ impl Future for ReadFut<'_> {
     }
 }
 
+#[derive(Debug)]
 pub struct ReadExactFut<'a> {
     buf_iter: IterMut<'a, u8>,
 }

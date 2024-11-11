@@ -19,6 +19,7 @@ const FIFO_SIZE: u32 = 8;
 
 static WRITER_WAKER: WakerCell = WAKER_CELL_INIT;
 
+#[derive(Debug)]
 pub struct Writer<P> {
     pub(super) _tx_pin: P,
 }
@@ -187,6 +188,7 @@ impl<P: TxPin> eio_async::Write for Writer<P> {
     }
 }
 
+#[derive(Debug)]
 struct WriteFut<'a> {
     buf: &'a [u8],
 }
@@ -227,6 +229,7 @@ impl Future for WriteFut<'_> {
     }
 }
 
+#[derive(Debug)]
 struct FlushFut;
 
 impl Future for FlushFut {

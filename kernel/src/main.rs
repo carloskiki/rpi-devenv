@@ -7,7 +7,12 @@ use core::{
 };
 use embassy_executor::task;
 use rpi::{
-    aux::{self}, data_memory_barrier, eio, eio_async::{Read as _, Write as _}, executor::Executor, gpio::{self}, main
+    aux::{self},
+    data_memory_barrier,
+    eio_async::{Read as _, Write as _},
+    executor::Executor,
+    gpio::{self},
+    main,
 };
 
 #[main]
@@ -16,50 +21,50 @@ fn main() -> ! {
     // Safety: We know that the main function never returns.
     let executor: &'static mut Executor = unsafe { core::mem::transmute(&mut executor) };
     executor.run(|spawner| {
-        spawner.spawn(blocking_task()).unwrap();
+        spawner.spawn(async_task()).unwrap();
     })
 }
 
-// #[task]
-// async fn async_task() {
-//     let config = aux::uart::Config {
-//         baud_rate: aux::uart::BaudRate::new(115200),
-//         bit_mode: aux::uart::BitMode::EightBits,
-//     };
-//     let mut rx =
-//         unsafe { aux::uart::Reader::get_unchecked(gpio::Pin::<15, _>::get().unwrap(), &config) };
-//     let mut tx =
-//         unsafe { aux::uart::Writer::get_unchecked(gpio::Pin::<14, _>::get().unwrap(), &config) };
-// 
-//     tx.write_all(b"Hello, world!\n").await.unwrap();
-// 
-//     let mut buf = [0; 1];
-//     loop {
-//         rx.read_exact(&mut buf).await.unwrap();
-//         tx.write_all(&buf).await.unwrap();
-//     }
-// }
-
 #[task]
-async fn blocking_task() {
-    let config = aux::uart::Config {
-        baud_rate: aux::uart::BaudRate::new(115200),
-        bit_mode: aux::uart::BitMode::EightBits,
-    };
-    let mut rx =
-        unsafe { aux::uart::Reader::get_unchecked(gpio::Pin::<15, _>::get().unwrap(), &config) };
-    let mut tx =
-        unsafe { aux::uart::Writer::get_unchecked(gpio::Pin::<14, _>::get().unwrap(), &config) };
+async fn async_task() {
+    let (mut rx, mut tx) = aux::uart::pair(
+        gpio::Pin::<15, _>::get().unwrap(),
+        gpio::Pin::<14, _>::get().unwrap(),
+        &aux::uart::Config {
+            baud_rate: aux::uart::BaudRate::new(115200),
+            bit_mode: aux::uart::BitMode::EightBits,
+        },
+    )
+    .unwrap();
 
-    <aux::uart::writer::Writer<_> as eio::Write>::write_all(&mut tx, b"Hello, world!\n")
-        .unwrap();
+    tx.write_all(b"Hello, world!\n").await.unwrap();
 
     let mut buf = [0; 1];
     loop {
-        <aux::uart::reader::Reader<_> as eio::Read>::read_exact(&mut rx, &mut buf).unwrap();
-        <aux::uart::writer::Writer<_> as eio::Write>::write_all(&mut tx, &buf).unwrap();
+        rx.read_exact(&mut buf).await.unwrap();
+        tx.write_all(&buf).await.unwrap();
     }
 }
+
+// #[task]
+// async fn blocking_task() {
+//     let (mut rx, mut tx) = aux::uart::pair(
+//         gpio::Pin::<15, _>::get().unwrap(),
+//         gpio::Pin::<14, _>::get().unwrap(),
+//         &aux::uart::Config {
+//             baud_rate: aux::uart::BaudRate::new(115200),
+//             bit_mode: aux::uart::BitMode::EightBits,
+//         },
+//     ).unwrap();
+//
+//     <aux::uart::writer::Writer<_> as eio::Write>::write_all(&mut tx, b"Hello, world!\n").unwrap();
+//
+//     let mut buf = [0; 1];
+//     loop {
+//         <aux::uart::reader::Reader<_> as eio::Read>::read_exact(&mut rx, &mut buf).unwrap();
+//         <aux::uart::writer::Writer<_> as eio::Write>::write_all(&mut tx, &buf).unwrap();
+//     }
+// }
 
 // Blink the led on panic
 #[panic_handler]
