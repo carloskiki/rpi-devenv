@@ -26,6 +26,9 @@
 - [drm/vc4 Broadcom VC4 Graphics Driver](https://www.kernel.org/doc/html/latest/gpu/vc4.html)
 
 ## TODOs
+
+- [ ] Add `defmt` support to crate
+
 ### Aux Interface
 #### Uart
 - [ ] Sending break signals
@@ -40,6 +43,13 @@ Auto-flow:
 Also propose:
 - RTS handling for transmitter.
 - CTS handling for receiver.
+#### SPI
+- [ ] SPI implementation
+__What we want__:
+- Be able to send and receive variable length data.
+- Be able to Config at start and send/receive fixed length data.
+- Be able to config fixed length between transactions.
+
 
 __Tests:__
 - [ ] Check if having pull-up/pull-down matters when pins are in alt mode (e.g., MiniUart)

@@ -1,0 +1,2 @@
+[target.armv6a-none-eabihf]
+rustflags = ["-C", "link-arg=-Tdefmt.x"]

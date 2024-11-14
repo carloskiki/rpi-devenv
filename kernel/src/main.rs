@@ -5,45 +5,53 @@ use core::{
     hint::black_box,
     ptr::{read_volatile, write_volatile},
 };
-use embassy_executor::task;
+use embassy_time::{block_for, Duration};
 use rpi::{
-    aux::{self},
+    aux::{
+        self,
+        uart::{BaudRate, BitMode},
+    },
     data_memory_barrier,
-    eio_async::{Read as _, Write as _},
-    executor::Executor,
+    eio::Write,
     gpio::{self},
     main,
 };
 
 #[main]
 fn main() -> ! {
-    let mut executor = Executor::new();
-    // Safety: We know that the main function never returns.
-    let executor: &'static mut Executor = unsafe { core::mem::transmute(&mut executor) };
-    executor.run(|spawner| {
-        spawner.spawn(async_task()).unwrap();
-    })
-}
-
-#[task]
-async fn async_task() {
-    let (mut rx, mut tx) = aux::uart::pair(
-        gpio::Pin::<15, _>::get().unwrap(),
+    let mut tx = aux::uart::Writer::get(
         gpio::Pin::<14, _>::get().unwrap(),
         &aux::uart::Config {
-            baud_rate: aux::uart::BaudRate::new(115200),
-            bit_mode: aux::uart::BitMode::EightBits,
+            baud_rate: BaudRate::new(115200),
+            bit_mode: BitMode::EightBits,
         },
     )
     .unwrap();
 
-    tx.write_all(b"Hello, world!\n").await.unwrap();
+    const AUX_ENABLES: *mut u32 = 0x20215004 as _;
+    const SPI_CNTL0: *mut u32 = 0x20215080 as _;
+    const SPI_CNTL1: *mut u32 = 0x20215084 as _;
+    const SPI_STAT: *mut u32 = 0x20215088 as _;
+    const SPI_IO: *mut u32 = 0x202150A0 as _;
+    const SPI_TXHOLD: *mut u32 = 0x202150B0 as _;
 
-    let mut buf = [0; 1];
-    loop {
-        rx.read_exact(&mut buf).await.unwrap();
-        tx.write_all(&buf).await.unwrap();
-    }
+    // Enable the SPI peripheral
+    unsafe { write_volatile(AUX_ENABLES, read_volatile(AUX_ENABLES) | 0b10) };
+    let speed = 4999;
+    let chip_select = 1;
+    let cntl0 = (speed << 20) | (chip_select << 17) | (0b11 << 14) |  (1 << 11) | 0b100;
+    unsafe { write_volatile(SPI_CNTL0, cntl0) };
+    unsafe { SPI_IO.write_volatile(8 << 24) };
+    let status = unsafe { SPI_STAT.read_volatile() };
+    tx.write_fmt(format_args!("SPI_STAT: {:#010X}\n", status)).unwrap();
+    tx.write_fmt(format_args!("tx level: {}\n", status >> 28)).unwrap();
+
+    while unsafe { SPI_STAT.read_volatile() } == status {};
+    let new_status = unsafe { SPI_STAT.read_volatile() };
+    tx.write_fmt(format_args!("SPI_STAT: {:#010X}\n", new_status)).unwrap();
+    tx.write_fmt(format_args!("rx level: {}\n", new_status >> 20)).unwrap();
+    
+    loop {}
 }
 
 // #[task]

@@ -5,6 +5,7 @@ use critical_section::CriticalSection;
 use crate::data_memory_barrier;
 
 pub mod uart;
+pub mod spi;
 
 /// Auxiliary Interrupt status
 /// BCM2835 ARM Peripherals, page 9
