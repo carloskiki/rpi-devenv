@@ -10,7 +10,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 pub mod aux;
-mod critical_section;
+mod critical_section_impl;
 pub mod executor;
 pub mod gpio;
 pub mod interrupt;
@@ -103,7 +103,7 @@ pub fn data_synchronization_barrier() {
 trait Sealed {}
 
 macro_rules! impl_sealed {
-    ($($t:ty),*) => {
+    ($($(<$bounds:tt>)? $t:ty),*) => {
         $(
             impl Sealed for $t {}
         )*

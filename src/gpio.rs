@@ -82,16 +82,19 @@ impl<const PIN: u8, T: PinType> Pin<PIN, T> {
         let address = unsafe { FUNCTION_SELECT_BASE.add(PIN as usize / 10) };
         let shift = (PIN as usize % 10) * 3;
         data_memory_barrier();
-        // Safety: The register is valid for reading and writing.
-        // Memory barrier used.
-        let func_sel = unsafe { read_volatile(address) };
-        // Safety: The register is valid for writing.
-        unsafe {
-            write_volatile(
-                address,
-                (func_sel & !(0b111 << shift)) | (T::MODE_BITS << shift),
-            )
-        };
+
+        critical_section::with(|_| {
+            // Safety: The register is valid for reading and writing.
+            // Memory barrier used.
+            let func_sel = unsafe { read_volatile(address) };
+            // Safety: The register is valid for writing.
+            unsafe {
+                write_volatile(
+                    address,
+                    (func_sel & !(0b111 << shift)) | (T::MODE_BITS << shift),
+                )
+            };
+        });
 
         Some(Pin {
             _pin: core::marker::PhantomData,

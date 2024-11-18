@@ -5,7 +5,6 @@ use core::{
     hint::black_box,
     ptr::{read_volatile, write_volatile},
 };
-use embassy_time::{block_for, Duration};
 use rpi::{
     aux::{
         self,
@@ -19,14 +18,13 @@ use rpi::{
 
 #[main]
 fn main() -> ! {
-    let mut tx = aux::uart::Writer::get(
+    let mut tx = unsafe { aux::uart::Writer::get_unchecked(
         gpio::Pin::<14, _>::get().unwrap(),
         &aux::uart::Config {
             baud_rate: BaudRate::new(115200),
             bit_mode: BitMode::EightBits,
         },
-    )
-    .unwrap();
+    ) };
 
     const AUX_ENABLES: *mut u32 = 0x20215004 as _;
     const SPI_CNTL0: *mut u32 = 0x20215080 as _;
@@ -39,18 +37,30 @@ fn main() -> ! {
     unsafe { write_volatile(AUX_ENABLES, read_volatile(AUX_ENABLES) | 0b10) };
     let speed = 4999;
     let chip_select = 1;
-    let cntl0 = (speed << 20) | (chip_select << 17) | (0b11 << 14) |  (1 << 11) | 0b100;
+    let cntl0 = (speed << 20) | (chip_select << 17) | (0b11 << 14) | (1 << 11) | 0b100;
     unsafe { write_volatile(SPI_CNTL0, cntl0) };
     unsafe { SPI_IO.write_volatile(8 << 24) };
     let status = unsafe { SPI_STAT.read_volatile() };
-    tx.write_fmt(format_args!("SPI_STAT: {:#010X}\n", status)).unwrap();
-    tx.write_fmt(format_args!("tx level: {}\n", status >> 28)).unwrap();
+    tx.write_fmt(format_args!("SPI_STAT: {:#010X}\n", status))
+        .unwrap();
+    tx.write_fmt(format_args!("tx level: {}\n", status >> 28))
+        .unwrap();
 
-    while unsafe { SPI_STAT.read_volatile() } == status {};
-    let new_status = unsafe { SPI_STAT.read_volatile() };
-    tx.write_fmt(format_args!("SPI_STAT: {:#010X}\n", new_status)).unwrap();
-    tx.write_fmt(format_args!("rx level: {}\n", new_status >> 20)).unwrap();
-    
+    let cntl0 = unsafe { SPI_CNTL0.read_volatile() };
+    tx.write_fmt(format_args!("SPI_CNTL0: {:#010X}\n", cntl0))
+        .unwrap();
+    unsafe { SPI_CNTL0.write_volatile(cntl0 | 1 << 9) };
+    let cntl0 = unsafe { SPI_CNTL0.read_volatile() };
+    tx.write_fmt(format_args!("SPI_CNTL0: {:#010X}\n", cntl0))
+        .unwrap();
+    unsafe { SPI_CNTL0.write_volatile(cntl0 | !(1 << 9)) };
+
+    let status = unsafe { SPI_STAT.read_volatile() };
+    tx.write_fmt(format_args!("SPI_STAT: {:#010X}\n", status))
+        .unwrap();
+    tx.write_fmt(format_args!("rx level: {}\n", status >> 20))
+        .unwrap();
+
     loop {}
 }
 

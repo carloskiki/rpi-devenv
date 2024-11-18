@@ -1,12 +1,15 @@
+pub const SPI1: *mut u32 = 0x20215080 as _;
+pub const SPI2: *mut u32 = 0x202150C0 as _;
+
 // BCM2835 manual Page 22
-const CONTROL0: u32 = 0x00;
+pub const CONTROL0: usize = 0x00;
 // BCM2835 manual Page 24
-const CONTROL1: u32 = 0x04;
+pub const CONTROL1: usize = 0x04;
 // BCM2835 manual Page 25
-const STATUS: u32 = 0x08;
+pub const STATUS: usize = 0x08;
 // BCM2835 manual Page 26
-const PEEK: u32 = 0x0C;
+pub const PEEK: usize = 0x0C;
 // BCM2835 manual Page 26
-const IO: u32 = 0x20;
+pub const IO: usize = 0x20;
 // BCM2835 manual Page 27
-const TXHOLD: u32 = 0x30;
+pub const TXHOLD: usize = 0x30;
