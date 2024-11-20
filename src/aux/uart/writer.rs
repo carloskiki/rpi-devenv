@@ -10,7 +10,7 @@ use crate::{
     aux::uart::registers::*,
     data_memory_barrier, eio, eio_async,
     gpio::{self, state::Alternate5},
-    hal_nb, set_waker, Sealed, WakerCell, WAKER_CELL_INIT,
+    hal_nb, set_waker, wake, Sealed, WakerCell, WAKER_CELL_INIT,
 };
 
 use super::Config;
@@ -50,7 +50,7 @@ impl<P: TxPin> Writer<P> {
 
         Some(Self { _tx_pin: tx_pin })
     }
-    
+
     /// Get the reader without checking if it is already in use.
     ///
     /// # Safety
@@ -59,15 +59,16 @@ impl<P: TxPin> Writer<P> {
     pub unsafe fn get_unchecked(tx_pin: P, config: &Config) -> Self {
         data_memory_barrier();
 
-        // Safety: Address is valid, and a memory barrier is used. A new `Reader` instance is not
-        // created if the `Reader` already activated in the rx bit.
-        unsafe {
-            // Enable receiver
-            let control_reg = read_volatile(EXTRA_CONTROL_REG);
-            write_volatile(EXTRA_CONTROL_REG, control_reg | 0b10);
-            // Clear fifo
-            write_volatile(INTERRUPT_ID_REG, 0b100);
-        }
+        critical_section::with(|_| {
+            // Safety: Address is valid, and a memory barrier is used.
+            unsafe {
+                // Enable receiver
+                let control_reg = read_volatile(EXTRA_CONTROL_REG);
+                write_volatile(EXTRA_CONTROL_REG, control_reg | 0b10);
+                // Clear fifo
+                write_volatile(INTERRUPT_ID_REG, 0b100);
+            }
+        });
 
         config.setup();
 
@@ -168,11 +169,11 @@ impl<P: TxPin> hal_nb::serial::Write for Writer<P> {
 /// This implementation is cancel-safe.
 impl<P: TxPin> eio_async::Write for Writer<P> {
     fn write(&mut self, buf: &[u8]) -> impl Future<Output = Result<usize, Self::Error>> {
-        WriteFut { buf }
+        WriteFut { _writer: self, buf }
     }
 
     fn flush(&mut self) -> impl Future<Output = Result<(), Self::Error>> {
-        FlushFut
+        FlushFut { _writer: self }
     }
 
     async fn write_all(&mut self, buf: &[u8]) -> Result<(), Self::Error> {
@@ -189,11 +190,12 @@ impl<P: TxPin> eio_async::Write for Writer<P> {
 }
 
 #[derive(Debug)]
-struct WriteFut<'a> {
-    buf: &'a [u8],
+struct WriteFut<'a, 'b, P> {
+    _writer: &'a mut Writer<P>,
+    buf: &'b [u8],
 }
 
-impl Future for WriteFut<'_> {
+impl<P: TxPin> Future for WriteFut<'_, '_, P> {
     type Output = Result<usize, Infallible>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -230,9 +232,11 @@ impl Future for WriteFut<'_> {
 }
 
 #[derive(Debug)]
-struct FlushFut;
+struct FlushFut<'a, P> {
+    _writer: &'a mut Writer<P>,
+}
 
-impl Future for FlushFut {
+impl<P: TxPin> Future for FlushFut<'_, P> {
     type Output = Result<(), Infallible>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -255,16 +259,15 @@ impl Future for FlushFut {
 }
 
 pub(super) fn interrupt_handler() {
+    data_memory_barrier();
     critical_section::with(|cs| {
-        // Safety: As above.
+        // Safety: Address is valid, memory barrier used.
         let mut reg = unsafe { INTERRUPT_ENABLE_REG.read_volatile() };
         reg &= !0b10;
         // Safety: As above.
         unsafe { INTERRUPT_ENABLE_REG.write_volatile(reg) };
 
-        if let Some(waker) = WRITER_WAKER.borrow(cs).take() {
-            waker.wake()
-        }
+        wake(&WRITER_WAKER, cs);
     });
 }
 

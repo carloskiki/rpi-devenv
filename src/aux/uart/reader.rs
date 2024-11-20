@@ -11,7 +11,7 @@ use crate::{
     aux::uart::{registers::*, Config},
     data_memory_barrier, eio, eio_async,
     gpio::{self, state::Alternate5},
-    hal_nb, set_waker, Sealed, WakerCell, WAKER_CELL_INIT,
+    hal_nb, set_waker, wake, Sealed, WakerCell, WAKER_CELL_INIT,
 };
 
 static READER_WAKER: WakerCell = WAKER_CELL_INIT;
@@ -56,15 +56,16 @@ impl<P: RxPin> Reader<P> {
     pub unsafe fn get_unchecked(rx_pin: P, config: &Config) -> Self {
         data_memory_barrier();
 
-        // Safety: Address is valid, and a memory barrier is used. A new `Reader` instance is not
-        // created if the `Reader` already activated in the rx bit.
-        unsafe {
-            // Enable receiver
-            let control_reg = read_volatile(EXTRA_CONTROL_REG);
-            write_volatile(EXTRA_CONTROL_REG, control_reg | 1);
-            // Clear fifo
-            write_volatile(INTERRUPT_ID_REG, 0b10);
-        }
+        critical_section::with(|_| {
+            // Safety: Address is valid, and a memory barrier is used.
+            unsafe {
+                // Enable receiver
+                let control_reg = read_volatile(EXTRA_CONTROL_REG);
+                write_volatile(EXTRA_CONTROL_REG, control_reg | 1);
+                // Clear fifo
+                write_volatile(INTERRUPT_ID_REG, 0b10);
+            }
+        });
 
         config.setup();
 
@@ -168,7 +169,7 @@ impl<P: RxPin> hal_nb::serial::Read for Reader<P> {
 /// only one byte. It is more efficient to use `read_exact` instead.
 impl<P: RxPin> eio_async::Read for Reader<P> {
     fn read(&mut self, buf: &mut [u8]) -> impl Future<Output = Result<usize, Self::Error>> {
-        ReadFut { buf }
+        ReadFut { _reader: self, buf }
     }
 
     fn read_exact(
@@ -176,17 +177,19 @@ impl<P: RxPin> eio_async::Read for Reader<P> {
         buf: &mut [u8],
     ) -> impl Future<Output = Result<(), ReadExactError<Self::Error>>> {
         ReadExactFut {
+            _reader: self,
             buf_iter: buf.iter_mut(),
         }
     }
 }
 
 #[derive(Debug)]
-pub struct ReadFut<'a> {
-    buf: &'a mut [u8],
+pub struct ReadFut<'a, 'b, P> {
+    _reader: &'a mut Reader<P>,
+    buf: &'b mut [u8],
 }
 
-impl Future for ReadFut<'_> {
+impl<P: RxPin> Future for ReadFut<'_, '_, P> {
     type Output = Result<usize, Error>;
 
     fn poll(
@@ -224,11 +227,12 @@ impl Future for ReadFut<'_> {
 }
 
 #[derive(Debug)]
-pub struct ReadExactFut<'a> {
-    buf_iter: IterMut<'a, u8>,
+pub struct ReadExactFut<'a, 'b, P> {
+    _reader: &'a mut Reader<P>,
+    buf_iter: IterMut<'b, u8>,
 }
 
-impl Future for ReadExactFut<'_> {
+impl<P: RxPin> Future for ReadExactFut<'_, '_, P> {
     type Output = Result<(), ReadExactError<Error>>;
 
     fn poll(
@@ -262,18 +266,17 @@ impl Future for ReadExactFut<'_> {
     }
 }
 
-// Clear interrupts and wake the reader/writer.
-pub(super) fn interrupt_handler() {
+/// Safety: Must be called only from the interrupt handler.
+pub(super) unsafe fn interrupt_handler() {
+    data_memory_barrier();
     critical_section::with(|cs| {
-        // Safety: As above.
+        // Safety: Address is valid, data memory barrier used.
         let mut reg = unsafe { INTERRUPT_ENABLE_REG.read_volatile() };
         reg &= !0b1;
         // Safety: As above.
         unsafe { INTERRUPT_ENABLE_REG.write_volatile(reg) };
 
-        if let Some(waker) = READER_WAKER.borrow(cs).take() {
-            waker.wake()
-        }
+        wake(&READER_WAKER, cs);
     });
 }
 

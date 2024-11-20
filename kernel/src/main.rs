@@ -18,13 +18,15 @@ use rpi::{
 
 #[main]
 fn main() -> ! {
-    let mut tx = unsafe { aux::uart::Writer::get_unchecked(
-        gpio::Pin::<14, _>::get().unwrap(),
-        &aux::uart::Config {
-            baud_rate: BaudRate::new(115200),
-            bit_mode: BitMode::EightBits,
-        },
-    ) };
+    let mut tx = unsafe {
+        aux::uart::Writer::get_unchecked(
+            gpio::Pin::<14, _>::get().unwrap(),
+            &aux::uart::Config {
+                baud_rate: BaudRate::new(115200),
+                bit_mode: BitMode::EightBits,
+            },
+        )
+    };
 
     const AUX_ENABLES: *mut u32 = 0x20215004 as _;
     const SPI_CNTL0: *mut u32 = 0x20215080 as _;

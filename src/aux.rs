@@ -4,8 +4,8 @@ use critical_section::CriticalSection;
 
 use crate::data_memory_barrier;
 
-pub mod uart;
 pub mod spi;
+pub mod uart;
 
 /// Auxiliary Interrupt status
 /// BCM2835 ARM Peripherals, page 9
@@ -32,5 +32,8 @@ pub(crate) fn interrupt_handler() {
     let aux_irq = unsafe { read_volatile(AUX_INTERRUPT_STATUS) };
     if aux_irq & 0b1 != 0 {
         uart::interrupt_handler();
+    }
+    if aux_irq & 0b10 != 0 {
+        spi::interrupt_handler();
     }
 }

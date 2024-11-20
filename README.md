@@ -79,6 +79,10 @@ __Tests:__
 - In the actual hardware, the memory is not capped at 0x20000000, does not look mirrored either so I don't know what
     is going on there.
 
+- In multicore systems, if a register is accessed by both the ISR and main code, we have to be careful. Exclusive access
+    must be ensured, and that means needing a critical section. This is because the ISR can be on any thread, not just
+    the one that owns the peripheral object.
+
 ## Mini UART Interesting Registers
 IER:
 - Receive interrupt: assert when at least 1 byte in FIFO.

@@ -127,3 +127,9 @@ fn set_waker(slot: &WakerCell, waker_ref: &Waker, cs: CriticalSection) -> bool {
     slot.borrow(cs).set(Some(to_set));
     was_set
 }
+
+fn wake(slot: &WakerCell, cs: CriticalSection) {
+    if let Some(waker) = slot.borrow(cs).take() {
+        waker.wake();
+    }
+}

@@ -1,4 +1,10 @@
-use core::{convert::Infallible, sync::atomic::AtomicBool};
+use core::{
+    convert::Infallible,
+    future::Future,
+    pin::Pin,
+    slice,
+    task::{Context, Poll},
+};
 
 // # Internals
 //
@@ -16,15 +22,16 @@ use core::{convert::Infallible, sync::atomic::AtomicBool};
 use crate::{
     data_memory_barrier, data_synchronization_barrier,
     gpio::{self, state::Alternate4},
-    hal, hal_async, hal_nb,
+    hal, hal_async, hal_nb, set_waker, wake, WakerCell, WAKER_CELL_INIT,
 };
 
 use super::AUX_ENABLES;
 
 pub mod mode;
 mod registers;
-use embedded_hal::spi::SpiBus;
 use registers::{CONTROL0, CONTROL1, IO, SPI1, STATUS, TXHOLD};
+
+static SPI_WAKER: WakerCell = WAKER_CELL_INIT;
 
 // Miscellaneous thoughts:
 // - We only support variable mode for CS, because supporting fixed mode with arbitrary byte counts
@@ -136,17 +143,7 @@ impl hal::spi::SpiBus for Spi1 {
         // Safety: Address valid, data memory barrier used.
         let ms_bit_first = unsafe { SPI1.add(CONTROL0).read_volatile() } >> 6 & 1 != 0;
         for (index, chunk) in words.chunks(3).enumerate() {
-            let mut entry = 0;
-            if ms_bit_first {
-                for (i, byte) in chunk.iter().enumerate() {
-                    entry |= (*byte as u32) << ((chunk.len() - i) * 8);
-                }
-            } else {
-                for (i, byte) in chunk.iter().enumerate() {
-                    entry |= (*byte as u32) << (i * 8);
-                }
-            }
-            entry |= (chunk.len() as u32 * 8) << 24; // 24 bits shift len
+            let entry = to_entry(chunk, ms_bit_first);
 
             // Safety: As above.
             while unsafe { SPI1.add(STATUS).read_volatile() >> 10 & 1 } == 1 {}
@@ -162,6 +159,7 @@ impl hal::spi::SpiBus for Spi1 {
         Ok(())
     }
 
+    // TODO: This could be optimized, but I can't be bothered.
     fn transfer(&mut self, read: &mut [u8], write: &[u8]) -> Result<(), Self::Error> {
         if read.len() >= write.len() {
             read[0..write.len()].copy_from_slice(write);
@@ -176,7 +174,6 @@ impl hal::spi::SpiBus for Spi1 {
     fn transfer_in_place(&mut self, words: &mut [u8]) -> Result<(), Self::Error> {
         data_memory_barrier();
         self.flush()?;
-        self.clear_fifos();
 
         // Safety: Address valid, data memory barrier used.
         let out_ms_bit_first = unsafe { SPI1.add(CONTROL0).read_volatile() } >> 6 & 1 != 0;
@@ -184,18 +181,7 @@ impl hal::spi::SpiBus for Spi1 {
         let in_ms_bit_first = unsafe { SPI1.add(CONTROL1).read_volatile() } & 1 != 0;
         let words_len = words.len();
         for (index, chunk) in words.chunks_mut(3).enumerate() {
-            let chunk_len = chunk.len();
-            let mut entry = 0;
-            if out_ms_bit_first {
-                for (i, byte) in chunk.iter().enumerate() {
-                    entry |= (*byte as u32) << ((chunk_len - i) * 8);
-                }
-            } else {
-                for (i, byte) in chunk.iter().enumerate() {
-                    entry |= (*byte as u32) << (i * 8);
-                }
-            }
-            entry |= (chunk.len() as u32 * 8) << 24;
+            let entry = to_entry(chunk, out_ms_bit_first);
 
             if (index + 1) * 3 >= words_len {
                 // Safety: As above.
@@ -209,15 +195,7 @@ impl hal::spi::SpiBus for Spi1 {
             while unsafe { SPI1.add(STATUS).read_volatile() >> 7 & 1 } == 1 {}
             // Safety: As above.
             let entry = unsafe { SPI1.add(IO).read_volatile() };
-            if in_ms_bit_first {
-                for (i, byte) in chunk.iter_mut().enumerate() {
-                    *byte = (entry >> ((chunk_len - i) * 8)) as u8;
-                }
-            } else {
-                for (i, byte) in chunk.iter_mut().enumerate() {
-                    *byte = (entry >> (i * 8)) as u8;
-                }
-            }
+            from_entry(chunk, entry, in_ms_bit_first);
         }
 
         Ok(())
@@ -229,22 +207,27 @@ impl hal::spi::SpiBus for Spi1 {
         while unsafe { self.busy() } {
             core::hint::spin_loop();
         }
+        self.clear_fifos();
         Ok(())
     }
 }
 
 impl hal_async::spi::SpiBus for Spi1 {
-    fn read(
-        &mut self,
-        words: &mut [u8],
-    ) -> impl core::future::Future<Output = Result<(), Self::Error>> {
+    fn read(&mut self, words: &mut [u8]) -> impl Future<Output = Result<(), Self::Error>> {
         <Self as hal_async::spi::SpiBus>::transfer_in_place(self, words)
     }
 
     async fn write(&mut self, words: &[u8]) -> Result<(), Self::Error> {
-        todo!()
+        hal_async::spi::SpiBus::flush(self).await?;
+
+        WriteFut {
+            spi: self,
+            chunks: words.chunks(3),
+        }
+        .await
     }
 
+    // TODO: This could be optimized, but I can't be bothered.
     async fn transfer(&mut self, read: &mut [u8], write: &[u8]) -> Result<(), Self::Error> {
         if read.len() >= write.len() {
             read[0..write.len()].copy_from_slice(write);
@@ -256,18 +239,171 @@ impl hal_async::spi::SpiBus for Spi1 {
         }
     }
 
-    async fn transfer_in_place(
-        &mut self,
-        words: &mut [u8],
-    ) -> Result<(), Self::Error> {
-        todo!()
+    async fn transfer_in_place(&mut self, words: &mut [u8]) -> Result<(), Self::Error> {
+        hal_async::spi::SpiBus::flush(self).await?;
+
+        TransferInPlaceFut {
+            spi: self,
+            words: as_chunks_mut(words),
+            tx_index: 0,
+            rx_index: 0,
+        }
+        .await
     }
 
-    async fn flush(&mut self) -> Result<(), Self::Error> {
-        todo!()
+    fn flush(&mut self) -> impl Future<Output = Result<(), Self::Error>> {
+        FlushFut { spi: self }
     }
 }
 
+pub struct WriteFut<'a, 'b> {
+    spi: &'a mut Spi1,
+    chunks: slice::Chunks<'b, u8>,
+}
+
+impl Future for WriteFut<'_, '_> {
+    type Output = Result<(), Infallible>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        data_memory_barrier();
+
+        // Safety: Address valid, data memory barrier used.
+        let ms_bit_first = unsafe { SPI1.add(CONTROL0).read_volatile() } >> 6 & 1 != 0;
+
+        while unsafe { SPI1.add(STATUS).read_volatile() >> 10 & 1 } == 0 {
+            let Some(chunk) = self.chunks.next() else {
+                return Poll::Ready(Ok(()));
+            };
+            let entry = to_entry(chunk, ms_bit_first);
+
+            if self.chunks.len() == 0 {
+                // Safety: As above.
+                unsafe { SPI1.add(IO).write_volatile(entry) };
+                return Poll::Ready(Ok(()));
+            } else {
+                // Safety: As above.
+                unsafe { SPI1.add(TXHOLD).write_volatile(entry) };
+            }
+        }
+
+        critical_section::with(|cs| {
+            set_waker(&SPI_WAKER, cx.waker(), cs);
+
+            // Safety: Address valid, data barrier used, and we have exclusive access.
+            unsafe {
+                let reg = SPI1.add(CONTROL1).read_volatile();
+                SPI1.add(CONTROL1).write_volatile(reg | 1 << 7);
+            };
+        });
+
+        Poll::Pending
+    }
+}
+
+pub struct TransferInPlaceFut<'a, 'b> {
+    spi: &'a mut Spi1,
+    // Guaranteed to be non-empty by the constructor.
+    words: (&'b mut [[u8; 3]], &'b mut [u8]),
+    tx_index: usize,
+    rx_index: usize,
+}
+
+impl Future for TransferInPlaceFut<'_, '_> {
+    type Output = Result<(), Infallible>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        data_memory_barrier();
+
+        // Safety: Address valid, data memory barrier used.
+        let out_ms_bit_first = unsafe { SPI1.add(CONTROL0).read_volatile() } >> 6 & 1 != 0;
+        // Safety: As above.
+        let in_ms_bit_first = unsafe { SPI1.add(CONTROL1).read_volatile() } & 1 != 0;
+
+        while unsafe { SPI1.add(STATUS).read_volatile() >> 7 & 1 } == 0
+            && self.rx_index <= self.words.0.len()
+        {
+            // Safety: Address valid, data memory barrier used.
+            let entry = unsafe { SPI1.add(IO).read_volatile() };
+            let rx_index = self.rx_index;
+            if self.rx_index < self.words.0.len() {
+                from_entry(&mut self.words.0[rx_index], entry, in_ms_bit_first);
+            } else {
+                from_entry(&mut self.words.1, entry, in_ms_bit_first);
+            }
+            self.rx_index += 1;
+        } 
+        if self.rx_index > self.words.0.len() {
+            return Poll::Ready(Ok(()));
+        }
+        if self.tx_index > self.words.0.len() {
+            critical_section::with(|cs| {
+                set_waker(&SPI_WAKER, cx.waker(), cs);
+
+                // Safety: Address valid, data barrier used, and we have exclusive access.
+                unsafe {
+                    let reg = SPI1.add(CONTROL1).read_volatile();
+                    SPI1.add(CONTROL1).write_volatile(reg | 1 << 6);
+                };
+            });
+            
+            return Poll::Pending;
+        }
+        
+        while unsafe { SPI1.add(STATUS).read_volatile() >> 10 & 1 } == 0
+            && self.tx_index <= self.words.0.len()
+        {
+            let words = self.words.0.get(self.tx_index).map(|x| x.as_slice()).unwrap_or(self.words.1);
+            let entry = to_entry(words, out_ms_bit_first);
+
+            if self.tx_index < self.words.0.len() {
+                // Safety: Address valid, data memory barrier used.
+                unsafe { SPI1.add(TXHOLD).write_volatile(entry) };
+            } else {
+                // Safety: Address valid, data memory barrier used.
+                unsafe { SPI1.add(IO).write_volatile(entry) };
+            }
+            self.tx_index += 1;
+        }
+
+        critical_section::with(|cs| {
+            set_waker(&SPI_WAKER, cx.waker(), cs);
+
+            // Safety: Address valid, data barrier used, and we have exclusive access.
+            unsafe {
+                let reg = SPI1.add(CONTROL1).read_volatile();
+                SPI1.add(CONTROL1).write_volatile(reg | 1 << 7);
+            };
+        });
+
+        Poll::Pending
+    }
+}
+
+pub struct FlushFut<'a> {
+    spi: &'a mut Spi1,
+}
+
+impl Future for FlushFut<'_> {
+    type Output = Result<(), Infallible>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        data_memory_barrier();
+        // Safety: data barrier used.
+        if unsafe { self.spi.busy() } {
+            critical_section::with(|cs| set_waker(&SPI_WAKER, cx.waker(), cs));
+            // Safety: Address valid, data barrier used.
+            unsafe {
+                let reg = SPI1.add(CONTROL1).read_volatile();
+                SPI1.add(CONTROL1).write_volatile(reg | 1 << 6);
+            };
+
+            Poll::Pending
+        } else {
+            self.spi.clear_fifos();
+            Poll::Ready(Ok(()))
+        }
+    }
+}
 /// One cannot use both this API and the `SpiBus` API at the same time. If needed, one should call
 /// `clear_fifos` between APIs switches.
 impl hal_nb::spi::FullDuplex for Spi1 {
@@ -365,3 +501,74 @@ pub enum DataOutHold {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CsHighTime(u8);
+
+fn to_entry(slice: &[u8], ms_bit_first: bool) -> u32 {
+    let mut entry = 0;
+    if ms_bit_first {
+        for (i, byte) in slice.iter().enumerate() {
+            entry |= (*byte as u32) << ((slice.len() - i) * 8);
+        }
+    } else {
+        for (i, byte) in slice.iter().enumerate() {
+            entry |= (*byte as u32) << (i * 8);
+        }
+    }
+
+    entry |= (slice.len() as u32) << 24;
+    entry
+}
+
+fn from_entry(slice: &mut [u8], entry: u32, ms_bit_first: bool) {
+    let slice_len = slice.len();
+    if ms_bit_first {
+        for (i, byte) in slice.iter_mut().enumerate() {
+            *byte = (entry >> ((slice_len - i) * 8)) as u8;
+        }
+    } else {
+        for (i, byte) in slice.iter_mut().enumerate() {
+            *byte = (entry >> (i * 8)) as u8;
+        }
+    }
+}
+
+// Unstable functions coming from the `std` lib.
+
+#[inline]
+pub const fn as_chunks_mut<const N: usize, T>(slice: &mut [T]) -> (&mut [[T; N]], &mut [T]) {
+    const { assert!(N != 0, "chunk size must be non-zero") };
+    let len_rounded_down = slice.len() / N * N;
+    // SAFETY: The rounded-down value is always the same or smaller than the
+    // original length, and thus must be in-bounds of the slice.
+    let (multiple_of_n, remainder) = unsafe { slice.split_at_mut_unchecked(len_rounded_down) };
+    // SAFETY: We already panicked for zero, and ensured by construction
+    // that the length of the subslice is a multiple of N.
+    let array_slice = unsafe { as_chunks_unchecked_mut(multiple_of_n) };
+    (array_slice, remainder)
+}
+
+#[inline]
+const unsafe fn as_chunks_unchecked_mut<const N: usize, T>(slice: &mut [T]) -> &mut [[T; N]] {
+    // assert_unsafe_precondition!(
+    //     check_language_ub,
+    //     "slice::as_chunks_unchecked requires `N != 0` and the slice to split exactly into `N`-element chunks",
+    //     (n: usize = N, len: usize = self.len()) => n != 0 && len % n == 0
+    // );
+    // SAFETY: Caller must guarantee that `N` is nonzero and exactly divides the slice length
+    let new_len = slice.len() / N;
+    // SAFETY: We cast a slice of `new_len * N` elements into
+    // a slice of `new_len` many `N` elements chunks.
+    unsafe { slice::from_raw_parts_mut(slice.as_mut_ptr().cast(), new_len) }
+}
+
+pub(super) fn interrupt_handler() {
+    data_memory_barrier();
+    critical_section::with(|cs| {
+        // Safety: Address is valid, data memory barrier used, we have exclusive access.
+        unsafe {
+            let reg = SPI1.add(CONTROL1).read_volatile();
+            SPI1.add(CONTROL1).write_volatile(reg & !(0b11 << 6))
+        };
+
+        wake(&SPI_WAKER, cs);
+    });
+}
