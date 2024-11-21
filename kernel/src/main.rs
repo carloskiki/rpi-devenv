@@ -5,75 +5,63 @@ use core::{
     hint::black_box,
     ptr::{read_volatile, write_volatile},
 };
-use embassy_time::{block_for, Duration};
 use rpi::{
     aux::{
         self,
-        spi::CsHighTime,
         uart::{BaudRate, BitMode},
     },
     data_memory_barrier,
     eio::Write,
     gpio::{self},
-    hal::spi::SpiBus,
     main,
 };
 
 #[main]
 fn main() -> ! {
-    let mut tx = aux::uart::Writer::get(
-        gpio::Pin::<14, _>::get().unwrap(),
-        &aux::uart::Config {
-            baud_rate: BaudRate::new(115200),
-            bit_mode: BitMode::EightBits,
-        },
-    )
-    .unwrap();
+    let mut tx = unsafe {
+        aux::uart::Writer::get_unchecked(
+            gpio::Pin::<14, _>::get().unwrap(),
+            &aux::uart::Config {
+                baud_rate: BaudRate::new(115200),
+                bit_mode: BitMode::EightBits,
+            },
+        )
+    };
 
-    let mut spi = aux::spi::Spi1::get(
-        gpio::Pin::get().unwrap(),
-        gpio::Pin::get().unwrap(),
-        gpio::Pin::get().unwrap(),
-        &aux::spi::Config {
-            speed: aux::spi::Speed::new(499),
-            post_input: false,
-            data_out_hold: aux::spi::DataOutHold::H0,
-            in_rising: false,
-            out_rising: false,
-            out_most_significant_first: true,
-            in_most_significant_first: true,
-            extra_cs_high_time: CsHighTime::new(0),
-            keep_input: false,
-            polarity: rpi::hal::spi::Polarity::IdleHigh,
-        },
-    )
-    .unwrap();
+    const AUX_ENABLES: *mut u32 = 0x20215004 as _;
+    const SPI_CNTL0: *mut u32 = 0x20215080 as _;
+    const SPI_CNTL1: *mut u32 = 0x20215084 as _;
+    const SPI_STAT: *mut u32 = 0x20215088 as _;
+    const SPI_IO: *mut u32 = 0x202150A0 as _;
+    const SPI_TXHOLD: *mut u32 = 0x202150B0 as _;
 
+    // Enable the SPI peripheral
+    unsafe { write_volatile(AUX_ENABLES, read_volatile(AUX_ENABLES) | 0b10) };
+    let speed = 4999;
+    let chip_select = 1;
+    let cntl0 = (speed << 20) | (chip_select << 17) | (0b11 << 14) | (1 << 11) | 0b100;
+    unsafe { write_volatile(SPI_CNTL0, cntl0) };
+    unsafe { SPI_IO.write_volatile(8 << 24) };
+    let status = unsafe { SPI_STAT.read_volatile() };
+    tx.write_fmt(format_args!("SPI_STAT: {:#010X}\n", status))
+        .unwrap();
+    tx.write_fmt(format_args!("tx level: {}\n", status >> 28))
+        .unwrap();
 
-    const SPI_STATUS: *const u8 = 0x20215088 as _;
+    let cntl0 = unsafe { SPI_CNTL0.read_volatile() };
+    tx.write_fmt(format_args!("SPI_CNTL0: {:#010X}\n", cntl0))
+        .unwrap();
+    unsafe { SPI_CNTL0.write_volatile(cntl0 | 1 << 9) };
+    let cntl0 = unsafe { SPI_CNTL0.read_volatile() };
+    tx.write_fmt(format_args!("SPI_CNTL0: {:#010X}\n", cntl0))
+        .unwrap();
+    unsafe { SPI_CNTL0.write_volatile(cntl0 | !(1 << 9)) };
 
-    let status = unsafe { read_volatile(SPI_STATUS) };
-    tx.write_fmt(format_args!("initial Status: 0x{:X}\n", status)).unwrap();
-    
-    spi.write(&[42_u8, 42, 42, 42]).unwrap();
-    let status = unsafe { read_volatile(SPI_STATUS) };
-    tx.write_fmt(format_args!("Status after write: 0x{:X}\n", status)).unwrap();
-
-    spi.write(&[46, 46]).unwrap();
-    let status = unsafe { read_volatile(SPI_STATUS) };
-    tx.write_fmt(format_args!("Status after another write: 0x{:X}\n", status)).unwrap();
-    
-    spi.write(&[42_u8]).unwrap();
-    spi.write(&[42_u8]).unwrap();
-    spi.write(&[42_u8]).unwrap();
-    let status = unsafe { read_volatile(SPI_STATUS) };
-    tx.write_fmt(format_args!("Status after 5 writes: 0x{:X}\n", status)).unwrap();
-
-    data_memory_barrier();
-    spi.clear_fifos();
-
-    let status = unsafe { read_volatile(SPI_STATUS) };
-    tx.write_fmt(format_args!("Status after clearing fifos: 0x{:X}\n", status)).unwrap();
+    let status = unsafe { SPI_STAT.read_volatile() };
+    tx.write_fmt(format_args!("SPI_STAT: {:#010X}\n", status))
+        .unwrap();
+    tx.write_fmt(format_args!("rx level: {}\n", status >> 20))
+        .unwrap();
 
     loop {}
 }
