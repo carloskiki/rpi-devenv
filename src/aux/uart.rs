@@ -62,17 +62,23 @@ pub(super) unsafe fn setup(_cs: &CriticalSection) {
     }
 }
 
-// Handle interrupts that pertain to the Mini UART peripheral.
-pub(super) fn interrupt_handler() {
+/// Handle interrupts that pertain to the Mini UART peripheral.
+///
+/// # Safety
+/// 
+/// Must be called from the interrupt handler.
+pub(super) unsafe fn interrupt_handler() {
     data_memory_barrier();
     // Safety: Address is valid, data memory barrier used.
     let interrupt_id = unsafe { read_volatile(INTERRUPT_ID_REG) };
     let interrupt_mask = (interrupt_id >> 1) & 0b11;
     if interrupt_mask & 0b1 != 0 {
-        writer::interrupt_handler();
+        // Safety: We are in the interrupt hander.
+        unsafe { writer::interrupt_handler() };
     }
     if interrupt_mask & 0b10 != 0 {
-        reader::interrupt_handler();
+        // Safety: We are in the interrupt hander.
+        unsafe { reader::interrupt_handler() };
     }
 }
 

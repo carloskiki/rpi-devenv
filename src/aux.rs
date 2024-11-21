@@ -31,9 +31,11 @@ pub(crate) fn interrupt_handler() {
     // Safety: Address is valid, data memory barrier used.
     let aux_irq = unsafe { read_volatile(AUX_INTERRUPT_STATUS) };
     if aux_irq & 0b1 != 0 {
-        uart::interrupt_handler();
+        // Safety: We are in the interrupt handler.
+        unsafe { uart::interrupt_handler() };
     }
     if aux_irq & 0b10 != 0 {
-        spi::interrupt_handler();
+        // Safety: As above.
+        unsafe { spi::Spi1::interrupt_handler() };
     }
 }

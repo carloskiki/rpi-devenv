@@ -258,7 +258,8 @@ impl<P: TxPin> Future for FlushFut<'_, P> {
     }
 }
 
-pub(super) fn interrupt_handler() {
+/// Safety: Must be called only from the interrupt handler.
+pub(super) unsafe fn interrupt_handler() {
     data_memory_barrier();
     critical_section::with(|cs| {
         // Safety: Address is valid, memory barrier used.

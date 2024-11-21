@@ -103,11 +103,16 @@ pub fn data_synchronization_barrier() {
 trait Sealed {}
 
 macro_rules! impl_sealed {
-    ($($(<$bounds:tt>)? $t:ty),*) => {
+    ($($t:ty),*) => {
         $(
             impl Sealed for $t {}
         )*
     };
+    ($($bounds:tt => $type:tt),*) => {
+        $(
+            impl<$bounds> Sealed for $type {}
+        )*
+    }
 }
 use impl_sealed;
 
