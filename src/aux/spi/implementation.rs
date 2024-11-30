@@ -63,7 +63,7 @@ impl Spi1 {
         // Safety: As above.
         unsafe { Self::BASE.add(CONTROL1).write_volatile(cntl1) };
 
-        Some(Spi1 {
+        Some(Self {
             _miso: miso,
             _mosi: mosi,
             _sclk: sclk,
@@ -83,14 +83,12 @@ impl Spi1 {
     pub fn clear_fifos(&mut self) {
         data_memory_barrier();
         // Safety: Adress valid, data barrier used, and we have exclusive access.
-        let reg = unsafe { Self::BASE.add(CONTROL0).read() };
+        let reg = unsafe { Self::BASE.add(CONTROL0).read_volatile() };
         // Safety: As above.
-        unsafe { Self::BASE.add(CONTROL0).write(reg | 1 << 9) };
+        unsafe { Self::BASE.add(CONTROL0).write_volatile(reg | 1 << 9) };
 
-        data_synchronization_barrier();
-        
         // Safety: As above.
-        unsafe { Self::BASE.add(CONTROL0).write(reg) };
+        unsafe { Self::BASE.add(CONTROL0).write_volatile(reg) };
     }
 
     /// Safety: Must be called in the interrupt handler.
@@ -403,22 +401,26 @@ impl hal_nb::spi::FullDuplex for Spi1 {
         data_memory_barrier();
 
         // Safety: Address valid, data barrier used.
-        if unsafe { Spi1::BASE.add(STATUS).read_volatile() >> 7 & 1 == 1 } {
+        if unsafe { Self::BASE.add(STATUS).read_volatile() >> 7 & 1 == 1 } {
             return Err(hal_nb::nb::Error::WouldBlock);
         }
 
         // Safety: As above.
-        Ok(unsafe { Spi1::BASE.add(IO).read_volatile() as u8 })
+        Ok(unsafe { Self::BASE.add(IO).read_volatile() as u8 })
     }
 
     fn write(&mut self, word: u8) -> hal_nb::nb::Result<(), Self::Error> {
         data_memory_barrier();
         // Safety: Address valid, data barrier used.
-        if unsafe { Spi1::BASE.add(STATUS).read_volatile() >> 10 & 1 == 1 } {
+        if unsafe { Self::BASE.add(STATUS).read_volatile() >> 10 & 1 == 1 } {
             return Err(hal_nb::nb::Error::WouldBlock);
         }
+        
+        let entry = word as u32 | 8 << 24;
+        // Safety: temporary
+        let address = unsafe { Self::BASE.add(IO) };
         // Safety: As above.
-        unsafe { Spi1::BASE.add(IO).write_volatile(word as u32 | 8 << 24) };
+        unsafe { address.write_volatile(entry) };
         Ok(())
     }
 }
@@ -430,23 +432,23 @@ impl hal_nb::spi::FullDuplex<u16> for Spi1 {
         data_memory_barrier();
 
         // Safety: Address valid, data barrier used.
-        if unsafe { Spi1::BASE.add(STATUS).read_volatile() >> 7 & 1 == 1 } {
+        if unsafe { Self::BASE.add(STATUS).read_volatile() >> 7 & 1 == 1 } {
             return Err(hal_nb::nb::Error::WouldBlock);
         }
 
         // Safety: As above.
-        Ok(unsafe { Spi1::BASE.add(IO).read_volatile() as u16 })
+        Ok(unsafe { Self::BASE.add(IO).read_volatile() as u16 })
     }
 
     fn write(&mut self, word: u16) -> hal_nb::nb::Result<(), Self::Error> {
         data_memory_barrier();
         // Safety: Address valid, data barrier used.
-        if unsafe { Spi1::BASE.add(STATUS).read_volatile() >> 10 & 1 == 1 } {
+        if unsafe { Self::BASE.add(STATUS).read_volatile() >> 10 & 1 == 1 } {
             return Err(hal_nb::nb::Error::WouldBlock);
         }
 
         // Safety: As above.
-        unsafe { Spi1::BASE.add(IO).write_volatile(word as u32 | 16 << 24) };
+        unsafe { Self::BASE.add(IO).write_volatile(word as u32 | 16 << 24) };
         Ok(())
     }
 }
